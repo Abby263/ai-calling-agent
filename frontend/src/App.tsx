@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  ArrowRight,
+  Bot,
+  Building2,
+  CalendarCheck,
   CheckCircle2,
   ClipboardCheck,
+  Database,
+  Globe2,
   ListChecks,
+  LockKeyhole,
+  MapPin,
+  Mic2,
   Moon,
   PhoneCall,
   Plus,
+  Server,
   ShieldCheck,
   Sparkles,
   Sun,
-  Target
+  Target,
+  Users,
+  Workflow
 } from "lucide-react";
 
 import { BusinessPreview } from "./components/BusinessPreview";
@@ -28,6 +40,9 @@ type Stage = "request" | "preview" | "progress" | "results";
 const DEFAULT_REQUEST =
   "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes.";
 
+const DEMO_SCREENSHOT_URL =
+  "https://raw.githubusercontent.com/Abby263/ai-calling-agent/main/docs/assets/ui-results.png";
+
 const initialFilters: SearchFilters = {
   radius_meters: 3000,
   cuisine: null,
@@ -39,7 +54,316 @@ const initialFilters: SearchFilters = {
   dietary_preference: null
 };
 
+type RouteName = "landing" | "console";
+
+type ThemeControls = {
+  darkMode: boolean;
+  onToggleTheme: () => void;
+};
+
+type LandingPageProps = ThemeControls & {
+  onOpenApp: () => void;
+};
+
+type ConsolePageProps = ThemeControls & {
+  onGoHome: () => void;
+};
+
+function routeFromPath(): RouteName {
+  return window.location.pathname.startsWith("/app") ? "console" : "landing";
+}
+
 export default function App() {
+  const [route, setRoute] = useState<RouteName>(() => routeFromPath());
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = window.localStorage.getItem("theme");
+    if (stored === "dark") return true;
+    if (stored === "light") return false;
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(routeFromPath());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    window.localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  const navigate = useCallback((nextRoute: RouteName) => {
+    const nextPath = nextRoute === "console" ? "/app" : "/";
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+    setRoute(nextRoute);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const toggleTheme = useCallback(() => setDarkMode((value) => !value), []);
+
+  return route === "console" ? (
+    <ConsolePage darkMode={darkMode} onToggleTheme={toggleTheme} onGoHome={() => navigate("landing")} />
+  ) : (
+    <LandingPage darkMode={darkMode} onToggleTheme={toggleTheme} onOpenApp={() => navigate("console")} />
+  );
+}
+
+function ThemeButton({ darkMode, onToggleTheme }: ThemeControls) {
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className="h-10 w-10 px-0"
+      aria-label={darkMode ? "Use light mode" : "Use dark mode"}
+      aria-pressed={darkMode}
+      title={darkMode ? "Use light mode" : "Use dark mode"}
+      onClick={onToggleTheme}
+    >
+      {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+    </Button>
+  );
+}
+
+function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
+  const useCases = [
+    {
+      title: "Restaurant discovery",
+      body: "Find nearby options, confirm happy hour, ask dietary questions, and compare confirmed answers.",
+      icon: MapPin
+    },
+    {
+      title: "Direct call lists",
+      body: "Call provided phone numbers, ask a custom question, and track every response in one structured view.",
+      icon: Users
+    },
+    {
+      title: "Appointments",
+      body: "Ask clinics, salons, or service providers about availability, constraints, and next steps.",
+      icon: CalendarCheck
+    },
+    {
+      title: "Business availability",
+      body: "Check product availability, reservation rules, pet policies, event slots, or consultation windows.",
+      icon: Building2
+    }
+  ];
+
+  const flow = [
+    ["1", "Describe the mission", "Speak or type a natural request instead of filling a rigid form."],
+    ["2", "Review the plan", "Approve targets, edit questions, set call limits, and exclude numbers."],
+    ["3", "Calls run transparently", "The voice agent discloses it is AI and calls only approved targets."],
+    ["4", "Compare outcomes", "Review answers, transcripts, confidence, and recommendations."]
+  ];
+
+  const platform = [
+    { label: "Planner", value: "LLM intent extraction", icon: Bot },
+    { label: "Search", value: "Google Places ready", icon: Globe2 },
+    { label: "Calling", value: "Twilio webhooks", icon: PhoneCall },
+    { label: "Storage", value: "Postgres schema", icon: Database },
+    { label: "Workers", value: "LiveKit or Pipecat path", icon: Server },
+    { label: "Safety", value: "Approval and disclosure logs", icon: LockKeyhole }
+  ];
+
+  return (
+    <main className="min-h-screen text-ink dark:text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/80">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <button type="button" className="flex items-center gap-3 text-left" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-lifted">
+              <PhoneCall size={18} />
+            </span>
+            <span>
+              <span className="block font-display text-base font-semibold text-slate-950 dark:text-white">
+                Voice Concierge Agent
+              </span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Approved AI calling workspace</span>
+            </span>
+          </button>
+          <div className="flex items-center gap-2">
+            <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} />
+            <Button type="button" onClick={onOpenApp}>
+              <ArrowRight size={16} />
+              Open app
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <section className="relative isolate min-h-[78svh] overflow-hidden border-b border-slate-200/70 dark:border-slate-800/80">
+        <img
+          src={DEMO_SCREENSHOT_URL}
+          alt="Voice Concierge dashboard showing structured call results"
+          className="absolute inset-0 -z-20 h-full w-full object-cover object-top opacity-[0.12] dark:opacity-10 sm:opacity-55 sm:dark:opacity-35"
+        />
+        <div className="absolute inset-0 -z-10 bg-white/90 dark:bg-slate-950/90 sm:bg-white/76 sm:dark:bg-slate-950/78" />
+        <div className="mx-auto grid min-h-[78svh] max-w-7xl content-center gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(22rem,0.75fr)] lg:py-20">
+          <div className="max-w-3xl">
+            <Badge className="border-brand-200 bg-white/90 text-brand-700 shadow-sm dark:border-brand-900/50 dark:bg-slate-950/80 dark:text-brand-300">
+              <Sparkles size={12} />
+              Human-approved outbound AI calls
+            </Badge>
+            <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.05] text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
+              Voice Concierge Agent
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 dark:text-slate-300 sm:text-lg sm:leading-8">
+              Turn a plain-language request into researched call targets, approved AI phone calls, transcripts,
+              extracted answers, and a decision-ready summary.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button type="button" className="px-5" onClick={onOpenApp}>
+                <Mic2 size={16} />
+                Start a request
+              </Button>
+              <a
+                href="#how-it-works"
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:border-slate-600"
+              >
+                <Workflow size={16} />
+                See workflow
+              </a>
+            </div>
+          </div>
+
+          <div className="self-end rounded-2xl border border-slate-200/80 bg-white/92 p-4 shadow-lifted backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/88">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                  Example mission
+                </p>
+                <p className="mt-1 font-display text-xl font-semibold text-slate-950 dark:text-white">
+                  Find dinner options and call to verify vegan meals.
+                </p>
+              </div>
+              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                Live flow
+              </Badge>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {["Search nearby candidates", "Ask approved questions", "Extract answers to JSON", "Recommend best option"].map(
+                (item, index) => (
+                  <div
+                    key={item}
+                    className="grid grid-cols-[2rem_1fr] items-center gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 text-sm text-slate-700 dark:border-slate-800/80 dark:bg-slate-950/50 dark:text-slate-300"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 font-semibold text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
+                      {index + 1}
+                    </span>
+                    <span className="font-medium">{item}</span>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white/70 py-12 dark:bg-slate-950/40">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid gap-4 md:grid-cols-4">
+            {useCases.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article
+                  key={item.title}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900/70"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
+                    <Icon size={18} />
+                  </span>
+                  <h2 className="mt-4 font-display text-lg font-semibold text-slate-950 dark:text-white">{item.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.body}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="border-y border-slate-200/70 bg-slate-50/80 py-14 dark:border-slate-800/80 dark:bg-slate-950/65">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.75fr_1fr]">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
+              How it works
+            </p>
+            <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
+              A controlled workflow for real-world phone work.
+            </h2>
+            <p className="mt-4 text-base leading-7 text-slate-600 dark:text-slate-400">
+              The app is designed for broad natural requests: nearby restaurant research, provided call lists,
+              appointment booking, store availability, and policy checks.
+            </p>
+          </div>
+          <div className="grid gap-3">
+            {flow.map(([step, title, body]) => (
+              <article
+                key={step}
+                className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900/70 sm:grid-cols-[3rem_1fr]"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+                  {step}
+                </span>
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">{title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
+                Production architecture
+              </p>
+              <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
+                Built for approvals, calls, evidence, and summaries.
+              </h2>
+            </div>
+            <Button type="button" variant="secondary" onClick={onOpenApp}>
+              <ArrowRight size={16} />
+              Use the console
+            </Button>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {platform.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article
+                  key={item.label}
+                  className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900/70"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <Icon size={18} />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-slate-950 dark:text-white">{item.label}</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">{item.value}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-slate-200/70 bg-white/80 py-8 dark:border-slate-800/80 dark:bg-slate-950/80">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-sm text-slate-500 dark:text-slate-400 sm:px-6">
+          <span>Voice Concierge Agent</span>
+          <span>Disclosed AI calls, user approval, structured outcomes.</span>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
   const [stage, setStage] = useState<Stage>("request");
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
@@ -51,7 +375,6 @@ export default function App() {
   const [maxCalls, setMaxCalls] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("theme") === "dark");
 
   const activeId = task?.task.id;
 
@@ -66,11 +389,6 @@ export default function App() {
   useEffect(() => {
     refreshHistory();
   }, [refreshHistory]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    window.localStorage.setItem("theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
 
   useEffect(() => {
     if (!task || !["calling", "summarizing"].includes(task.task.status)) {
@@ -242,7 +560,7 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {task ? (
                       <Badge className={statusClass(task.task.status)}>
                         <span className="relative flex h-1.5 w-1.5">
@@ -259,17 +577,24 @@ export default function App() {
                     <Button
                       type="button"
                       variant="secondary"
-                      className="h-10 w-10 px-0"
-                      aria-label={darkMode ? "Use light mode" : "Use dark mode"}
-                      aria-pressed={darkMode}
-                      title={darkMode ? "Use light mode" : "Use dark mode"}
-                      onClick={() => setDarkMode((value) => !value)}
+                      className="h-10 w-10 px-0 sm:w-auto sm:px-4"
+                      aria-label="Open overview"
+                      title="Open overview"
+                      onClick={onGoHome}
                     >
-                      {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                      <Globe2 size={16} />
+                      <span className="hidden sm:inline">Overview</span>
                     </Button>
-                    <Button type="button" onClick={startNewTask}>
+                    <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} />
+                    <Button
+                      type="button"
+                      className="h-10 w-10 px-0 sm:w-auto sm:px-4"
+                      aria-label="Start a new task"
+                      title="Start a new task"
+                      onClick={startNewTask}
+                    >
                       <Plus size={16} />
-                      New task
+                      <span className="hidden sm:inline">New task</span>
                     </Button>
                   </div>
                 </div>
@@ -325,13 +650,17 @@ export default function App() {
                   </div>
                 </nav>
 
-                <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/80 dark:bg-panel-gradient-dark">
+                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/80 dark:bg-panel-gradient-dark sm:grid-cols-4">
                   {taskStats.map((stat, index) => (
                     <div
                       key={stat.label}
-                      className={`px-3 py-2.5 ${index < taskStats.length - 1 ? "border-r border-slate-200/70 dark:border-slate-800/70" : ""}`}
+                      className={`border-slate-200/70 px-3 py-2.5 dark:border-slate-800/70 ${
+                        index % 2 === 0 ? "border-r sm:border-r" : ""
+                      } ${index < 2 ? "border-b sm:border-b-0" : ""} ${
+                        index < taskStats.length - 1 ? "sm:border-r" : ""
+                      }`}
                     >
-                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">
                         <span className="text-brand-600 dark:text-brand-400">{stat.icon}</span>
                         {stat.label}
                       </p>
