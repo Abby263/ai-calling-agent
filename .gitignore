@@ -9,6 +9,7 @@ build/
 .vite/
 coverage/
 .vercel/
+.playwright-cli/
 
 .venv/
 venv/

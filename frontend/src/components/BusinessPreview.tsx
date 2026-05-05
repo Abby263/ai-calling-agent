@@ -1,4 +1,12 @@
-import { Check, ExternalLink, Phone, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Check,
+  ClipboardList,
+  ExternalLink,
+  Phone,
+  Plus,
+  ShieldCheck,
+  Trash2
+} from "lucide-react";
 
 import { metersToDistance, priceLabel, statusClass } from "../lib/format";
 import type { Question, TaskDetail } from "../types/domain";
@@ -31,6 +39,7 @@ export function BusinessPreview({
   const isDirectCallTask = task.task.parsed_intent_json.task_kind === "direct_calls";
   const targetLabel = isDirectCallTask ? "contact" : "business";
   const targetLabelPlural = isDirectCallTask ? "contacts" : "businesses";
+  const approvedQuestions = questions.filter((question) => question.text.trim()).length;
 
   function toggleBusiness(id: string) {
     if (selectedSet.has(id)) {
@@ -53,20 +62,43 @@ export function BusinessPreview({
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="grid gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand">Review before calls</p>
-        <h1 className="text-2xl font-semibold text-ink">
-          Approve the {targetLabelPlural} and call script
-        </h1>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">
-          Calls are capped at {maxCalls}. The agent will disclose it is an AI assistant calling on
-          behalf of the user and will only ask the approved questions.
-        </p>
+    <section className="grid gap-4">
+      <div className="rounded-md border border-line bg-white p-5 shadow-soft">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Approval queue</p>
+            <h1 className="mt-1 text-2xl font-semibold text-ink">
+              Approve {targetLabelPlural} and questions
+            </h1>
+          </div>
+          <div className="grid w-full grid-cols-3 overflow-hidden rounded-md border border-line bg-panel sm:w-auto sm:min-w-80">
+            {[
+              ["Selected", selectedIds.length],
+              ["Limit", maxCalls],
+              ["Questions", approvedQuestions]
+            ].map(([label, value]) => (
+              <div key={label} className="border-r border-line px-3 py-2 last:border-r-0">
+                <p className="text-xs font-medium text-slate-500">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={17} className="text-brand" />
+              <h2 className="font-semibold text-slate-950">
+                {task.businesses.length} {targetLabelPlural}
+              </h2>
+            </div>
+            <Badge className="border-amber-200 bg-amber-50 text-amber-800">
+              {selectedIds.length}/{maxCalls} queued
+            </Badge>
+          </div>
           <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-line bg-panel px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 max-lg:hidden">
             <span />
             <span>{isDirectCallTask ? "Contact" : "Business"}</span>
@@ -82,7 +114,9 @@ export function BusinessPreview({
                   key={business.id}
                   type="button"
                   onClick={() => toggleBusiness(business.id)}
-                  className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-slate-50 lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem]"
+                  className={`grid w-full gap-3 px-4 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
+                    selected ? "bg-blue-50/70 hover:bg-blue-50" : "hover:bg-slate-50"
+                  }`}
                 >
                   <span
                     className={`flex h-8 w-8 items-center justify-center rounded-md border ${
@@ -132,7 +166,7 @@ export function BusinessPreview({
           </div>
         </div>
 
-        <aside className="grid content-start gap-4 rounded-md border border-line bg-white p-4 shadow-soft">
+        <aside className="grid content-start gap-4 rounded-md border border-line bg-white p-4 shadow-soft xl:sticky xl:top-4">
           <div className="rounded-md border border-blue-100 bg-blue-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand">Detected objective</p>
             <p className="mt-1 text-sm leading-6 text-slate-700">
@@ -201,7 +235,9 @@ export function BusinessPreview({
               disabled={loading || selectedIds.length === 0 || questions.every((question) => !question.text.trim())}
             >
               <Phone size={16} />
-              {loading ? "Starting calls" : `Call ${selectedIds.length} ${selectedIds.length === 1 ? targetLabel : targetLabelPlural}`}
+              {loading
+                ? "Starting calls"
+                : `Call ${selectedIds.length} ${selectedIds.length === 1 ? targetLabel : targetLabelPlural}`}
             </Button>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-line bg-panel p-3 text-xs leading-5 text-slate-600">

@@ -1,26 +1,49 @@
 import {
+  CalendarPlus,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
   LocateFixed,
   Mic,
-  PhoneForwarded,
+  PhoneCall,
+  PhoneOutgoing,
+  Route,
   Send,
   ShieldCheck,
   SlidersHorizontal,
-  Square
+  Square,
+  Stethoscope,
+  Utensils,
+  Users
 } from "lucide-react";
 import { useState } from "react";
 
 import { getBrowserLocation } from "../lib/location";
 import { useSpeechInput } from "../lib/speech";
 import type { LocationInput, SearchFilters } from "../types/domain";
-import { Button, Field, Input, Select, Textarea } from "./ui";
+import { Badge, Button, Field, Input, Select, Textarea } from "./ui";
 
 const EXAMPLES = [
-  "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes.",
-  "Book an appointment with a doctor from Apple Tree at Harbour Street near me.",
-  "Find happy hours near me and ask if they have vegan food.",
-  "Call these numbers and ask who is available for a project check-in tomorrow morning."
+  {
+    label: "Dinner RSVP",
+    icon: Users,
+    text: "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes."
+  },
+  {
+    label: "Doctor appointment",
+    icon: Stethoscope,
+    text: "Book an appointment with a doctor from Apple Tree at Harbour Street near me."
+  },
+  {
+    label: "Restaurant research",
+    icon: Utensils,
+    text: "Find happy hours near me and ask if they have vegan food."
+  },
+  {
+    label: "Project check-in",
+    icon: ClipboardCheck,
+    text: "Call these numbers and ask who is available for a project check-in tomorrow morning."
+  }
 ];
 
 export function RequestComposer({
@@ -62,29 +85,37 @@ export function RequestComposer({
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
-        <div className="grid gap-6 p-5 sm:p-7 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand">Voice concierge</p>
-              <h1 className="max-w-3xl text-3xl font-semibold leading-tight text-ink sm:text-4xl">
-                Give it a task. It figures out who to call and what to track.
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                Paste phone numbers directly, ask for nearby businesses, or dictate the whole task.
-                You approve every call and edit the questions before anything is placed.
-              </p>
+    <section className="grid gap-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand">New concierge task</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                What should the agent handle?
+              </h2>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="border-sky-200 bg-sky-50 text-sky-700">
+                <PhoneCall size={13} />
+                Calls
+              </Badge>
+              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                <ShieldCheck size={13} />
+                Approval
+              </Badge>
+            </div>
+          </div>
 
-            <div className="grid gap-3">
-              <Textarea
-                value={requestText}
-                onChange={(event) => setRequestText(event.target.value)}
-                rows={7}
-                placeholder={EXAMPLES[0]}
-                className="text-base leading-7"
-              />
+          <div className="grid gap-4 p-5">
+            <Textarea
+              value={requestText}
+              onChange={(event) => setRequestText(event.target.value)}
+              rows={8}
+              placeholder={EXAMPLES[0].text}
+              className="min-h-48 bg-slate-50 text-base leading-7"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -96,58 +127,95 @@ export function RequestComposer({
                   {speech.listening ? <Square size={16} /> : <Mic size={16} />}
                   {speech.listening ? "Stop" : "Speak"}
                 </Button>
-                <Button type="button" onClick={onPreview} disabled={loading || requestText.trim().length < 4}>
-                  <Send size={16} />
-                  {loading ? "Preparing" : "Review task"}
-                </Button>
                 <Button type="button" variant="ghost" onClick={() => setShowNearbyOptions(!showNearbyOptions)}>
                   <SlidersHorizontal size={16} />
-                  Nearby search options
+                  Nearby options
                   {showNearbyOptions ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                 </Button>
               </div>
-              {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+              <Button type="button" onClick={onPreview} disabled={loading || requestText.trim().length < 4}>
+                <Send size={16} />
+                {loading ? "Preparing" : "Build approval queue"}
+              </Button>
             </div>
+            {error ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p> : null}
           </div>
-
-          <aside className="grid content-start gap-3 rounded-md border border-line bg-panel p-4">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-brand">
-                <PhoneForwarded size={18} />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">Works with general requests</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Direct phone-number lists skip business search and go straight to an approval queue.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
-                <ShieldCheck size={18} />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">Human approval gate</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  The agent discloses it is AI, avoids sales calls, and only asks approved questions.
-                </p>
-              </div>
-            </div>
-          </aside>
         </div>
 
-        <div className="border-t border-line bg-slate-50 px-5 py-4 sm:px-7">
-          <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
-              <Button key={example} type="button" variant="secondary" onClick={() => setRequestText(example)}>
-                {example.startsWith("Call")
-                  ? "Use call-list example"
-                  : example.startsWith("Book")
-                    ? "Use appointment example"
-                    : "Use nearby example"}
-              </Button>
-            ))}
+        <aside className="grid content-start gap-4">
+          <div className="rounded-md border border-slate-800 bg-slate-950 p-5 text-white shadow-soft">
+            <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
+              <Route size={16} />
+              Task route
+            </div>
+            <div className="mt-5 grid gap-4">
+              {[
+                ["01", "Parse request", "intent, contacts, places"],
+                ["02", "Review queue", "targets and questions"],
+                ["03", "Run calls", "status, transcript, extraction"],
+                ["04", "Compare results", "recommendation and evidence"]
+              ].map(([step, title, detail]) => (
+                <div key={step} className="grid grid-cols-[2.25rem_1fr] gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md border border-white/15 bg-white/10 text-xs font-semibold text-cyan-100">
+                    {step}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">{title}</p>
+                    <p className="text-xs text-slate-400">{detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
+
+          <div className="rounded-md border border-line bg-white p-5 shadow-soft">
+            <div className="flex items-center gap-2">
+              <PhoneOutgoing size={17} className="text-brand" />
+              <h2 className="font-semibold text-slate-950">Outbound policy</h2>
+            </div>
+            <div className="mt-4 grid gap-3 text-sm text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                AI caller disclosure
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-sky-500" />
+                User-approved targets only
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                No sensitive data collection
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="rounded-md border border-line bg-white p-4 shadow-soft">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold text-slate-950">Fast starters</h2>
+          <Badge className="border-slate-200 bg-slate-100 text-slate-600">
+            <CalendarPlus size={13} />
+            Voice or text
+          </Badge>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {EXAMPLES.map((example) => {
+            const Icon = example.icon;
+            return (
+              <button
+                key={example.label}
+                type="button"
+                onClick={() => setRequestText(example.text)}
+                className="grid min-h-24 gap-2 rounded-md border border-line bg-panel p-3 text-left transition hover:border-brand hover:bg-blue-50"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-brand shadow-sm">
+                  <Icon size={16} />
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{example.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

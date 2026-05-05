@@ -1,4 +1,4 @@
-import { Download, Mail, Printer } from "lucide-react";
+import { CheckCircle2, Download, FileText, Mail, Printer, Table2 } from "lucide-react";
 
 import { metersToDistance, outcomeLabel, statusClass, triStateLabel } from "../lib/format";
 import type { TaskDetail } from "../types/domain";
@@ -13,6 +13,9 @@ export function ResultsView({ task }: { task: TaskDetail }) {
   const mailto = `mailto:?subject=${encodeURIComponent("Voice Concierge results")}&body=${encodeURIComponent(
     task.summary?.final_summary ?? ""
   )}`;
+  const completedCalls = task.calls.filter((call) => call.status === "completed").length;
+  const transcriptCount = task.calls.filter((call) => call.transcript).length;
+  const recommendedCount = results.filter((result) => result.recommended).length;
 
   function exportJson() {
     const blob = new Blob([JSON.stringify(task, null, 2)], { type: "application/json" });
@@ -25,34 +28,52 @@ export function ResultsView({ task }: { task: TaskDetail }) {
   }
 
   return (
-    <section className="grid gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand">Final summary</p>
-          <h1 className="text-2xl font-semibold text-ink">
-            {isDirectCallTask
-              ? "Call outcome tracker"
-              : isAppointmentTask
-                ? "Appointment availability"
-                : "Business comparison"}
-          </h1>
+    <section className="grid gap-4">
+      <div className="rounded-md border border-line bg-white p-5 shadow-soft">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="grid gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Final summary</p>
+            <h1 className="text-2xl font-semibold text-ink">
+              {isDirectCallTask
+                ? "Call outcome tracker"
+                : isAppointmentTask
+                  ? "Appointment availability"
+                  : "Business comparison"}
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => window.print()}>
+              <Printer size={16} />
+              PDF
+            </Button>
+            <Button type="button" variant="secondary" onClick={exportJson}>
+              <Download size={16} />
+              JSON
+            </Button>
+            <a
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
+              href={mailto}
+            >
+              <Mail size={16} />
+              Email
+            </a>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={() => window.print()}>
-            <Printer size={16} />
-            PDF
-          </Button>
-          <Button type="button" variant="secondary" onClick={exportJson}>
-            <Download size={16} />
-            JSON
-          </Button>
-          <a
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
-            href={mailto}
-          >
-            <Mail size={16} />
-            Email
-          </a>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {[
+            ["Completed calls", completedCalls, CheckCircle2],
+            ["Recommended", recommendedCount, Table2],
+            ["Transcripts", transcriptCount, FileText]
+          ].map(([label, value, Icon]) => {
+            const MetricIcon = Icon as typeof CheckCircle2;
+            return (
+              <div key={label as string} className="rounded-md border border-line bg-panel p-3">
+                <MetricIcon size={16} className="text-brand" />
+                <p className="mt-2 text-xs font-medium text-slate-500">{label as string}</p>
+                <p className="text-xl font-semibold text-slate-950">{value as number}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -100,6 +121,10 @@ export function ResultsView({ task }: { task: TaskDetail }) {
       </div>
 
       <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+          <Table2 size={17} className="text-brand" />
+          <h2 className="font-semibold text-slate-950">Structured results</h2>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] border-collapse text-sm">
             <thead className="bg-panel text-left text-xs uppercase tracking-wide text-slate-500">
