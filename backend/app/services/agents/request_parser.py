@@ -149,7 +149,10 @@ class RequestParserAgent:
             radius_meters=radius,
             required_questions=questions,
             constraints=constraints,
-            calls_required="call" in text or "ask" in text or "find out" in text,
+            calls_required=any(
+                phrase in text
+                for phrase in ["call", "ask", "find out", "book", "appointment", "invite"]
+            ),
             online_search_enough=False,
             summary_criteria=summary_criteria,
             output_format=output_format,
