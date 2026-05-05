@@ -1,27 +1,198 @@
 # Voice Concierge Agent
 
-Production-oriented MVP for a voice concierge that can call user-provided phone numbers for a general task or search nearby businesses first, ask approved phone questions through an AI-disclosed call flow, extract structured answers, and summarize recommendations.
+Voice Concierge Agent is a production-oriented MVP for turning natural-language requests into approved outbound calls, structured transcripts, and decision-ready summaries.
 
-The default local mode is safe demo mode: no real calls, no external Places lookups, and no OpenAI requests unless you set provider keys and `DEMO_MODE=false`.
+Example requests:
+
+- "Call the below numbers and invite them for dinner. Keep track of who said yes."
+- "Book an appointment with a doctor from Apple Tree at Harbour Street near me."
+- "Find nearby restaurants with happy hours and ask whether they have vegan meal options."
+- "Call salons near me and ask who has availability tomorrow afternoon."
+
+The app is intentionally not limited to restaurant filters. Users can type or speak general requests, provide phone numbers directly, or ask the system to discover nearby businesses first.
+
+Live app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
+
+> Current deployment runs in `DEMO_MODE=true`. It demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
+
+## Product Summary
+
+Voice Concierge Agent is designed for users who want an AI assistant to call on their behalf, ask a small set of approved questions, and return a clear answer instead of forcing them to manually search, call, and compare options.
+
+Primary workflows:
+
+- Direct call list: paste phone numbers and ask the agent to invite, confirm, check availability, or collect answers.
+- Nearby business discovery: search businesses around the user, rank them, approve the call list, then call.
+- Appointment availability: find or call clinics, salons, stores, hotels, restaurants, or venues for availability and requirements.
+- Structured summary: convert transcripts into tables, recommendations, follow-up items, and uncertainty notes.
+
+Safety controls:
+
+- The user must approve call targets before calls start.
+- Questions are editable before calls.
+- The voice agent discloses that it is an AI assistant.
+- Calls are capped per task.
+- The system avoids sales, spam, emergency services, and unnecessary personal data collection.
+
+## UI Demo
+
+There is no recorded demo video in this repository yet. The screenshots below show the production MVP flow.
+
+### 1. Natural-Language Intake
+
+The user starts with a general request. The app can handle direct phone lists, appointment requests, or nearby discovery.
+
+![Voice Concierge intake screen](docs/assets/ui-intake.png)
+
+### 2. Human Approval Queue
+
+The app parses the request, creates call targets, proposes questions, and waits for user approval.
+
+![Voice Concierge approval queue](docs/assets/ui-approval.png)
+
+### 3. Structured Results
+
+After calls complete, the app shows the summary, structured table, call outcomes, transcripts, and export options.
+
+![Voice Concierge results screen](docs/assets/ui-results.png)
+
+### 4. Dark Mode
+
+The web dashboard includes a light/dark theme toggle for operator use.
+
+![Voice Concierge dark mode](docs/assets/ui-dark-mode.png)
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User["User: voice or text request"] --> Web["React web app"]
+  Web --> API["FastAPI API"]
+  API --> Parser["RequestParserAgent"]
+  Parser --> Intent{"Task kind"}
+  Intent -->|Direct numbers| DirectTargets["Direct contact list"]
+  Intent -->|Nearby discovery| Search["SearchAgent: Google Places"]
+  Search --> Ranking["RankingAgent"]
+  DirectTargets --> Approval["Human approval queue"]
+  Ranking --> Approval
+  Approval --> Planner["CallPlannerAgent"]
+  Planner --> Orchestrator["Call orchestration"]
+  Orchestrator --> Voice["VoiceCallAgent"]
+  Voice --> Telephony["Twilio today; LiveKit/Pipecat-ready boundary"]
+  Telephony --> Recipient["Business or contact"]
+  Recipient --> Transcript["Transcript and call status"]
+  Transcript --> Extraction["TranscriptExtractionAgent"]
+  Extraction --> Summary["SummaryAgent"]
+  Summary --> Web
+  API --> Store[("PostgreSQL in production / memory in demo")]
+  Orchestrator --> Store
+  Extraction --> Store
+  Summary --> Store
+```
+
+### Runtime Components
+
+| Layer | Responsibility |
+| --- | --- |
+| React web app | Intake, voice input, location capture, approval queue, live task status, results, transcripts, export |
+| FastAPI API | Task lifecycle, intent planning, search orchestration, call approval, summary retrieval, deletion |
+| Agents | Request parsing, search, ranking, call planning, voice call behavior, transcript extraction, summary |
+| Telephony adapter | Outbound call provider abstraction. Current MVP uses Twilio adapter and demo fallback |
+| Places adapter | Google Places integration with demo fallback |
+| AI adapter | OpenAI-powered planning, extraction, and summarization with deterministic fallback in demo mode |
+| Store | In-memory demo store or PostgreSQL-backed task/call/summary persistence |
+| Vercel | Production deployment for the frontend and FastAPI serverless API |
+
+### Core Use Case: Dinner Invitation
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant UI as Web UI
+  participant API as FastAPI
+  participant P as RequestParserAgent
+  participant C as CallPlannerAgent
+  participant V as VoiceCallAgent
+  participant T as Telephony
+  participant E as TranscriptExtractionAgent
+  participant S as SummaryAgent
+
+  U->>UI: "Call these numbers and invite them for dinner"
+  UI->>API: POST /api/tasks/preview
+  API->>P: Parse request and phone numbers
+  P-->>API: Direct call task + proposed questions
+  API-->>UI: Approval queue
+  U->>UI: Approves contacts and questions
+  UI->>API: POST /api/tasks/{id}/approve-calls
+  API->>C: Build call plan
+  loop Approved targets
+    C->>V: Start call script
+    V->>T: Place call
+    T-->>V: Status + transcript
+    V->>E: Extract answer
+  end
+  E->>S: Structured outcomes
+  S-->>UI: Final recommendation and follow-up table
+```
+
+### Core Use Case: Doctor Appointment
+
+For requests like "Book an appointment with a doctor from Apple Tree at Harbour Street near me", the planner detects an appointment availability task. The agent can ask clinics about availability and booking requirements, but the product should not collect or transmit medical details through the AI caller.
 
 ## Project Structure
 
 ```text
 .
-├── backend/                  # FastAPI API, agents, provider adapters, schema
+├── api/                      # Vercel Python entrypoint for FastAPI
+├── backend/                  # FastAPI app, agents, provider adapters, database schema
 │   ├── app/api/              # REST endpoints and Twilio webhooks
-│   ├── app/core/             # Settings and environment handling
-│   ├── app/db/               # In-memory dev store and PostgreSQL schema
-│   └── app/services/         # Agents, orchestration, Places, Twilio
-├── frontend/                 # React + TypeScript + Tailwind responsive web app
-├── mobile/                   # Expo-ready mobile shell for later native buildout
-├── packages/shared/          # Shared TypeScript API contracts
-├── docs/                     # Architecture, prompts, API, deployment notes
+│   ├── app/core/             # Environment and settings
+│   ├── app/db/               # In-memory store, PostgreSQL store, SQL schema
+│   └── app/services/         # Agents, orchestration, Places, Twilio, compliance
+├── docs/                     # Architecture, API, prompts, deployment, demo screenshots
+│   └── assets/               # README screenshots
+├── frontend/                 # React + TypeScript + Tailwind web dashboard
+├── mobile/                   # Expo-ready shell for later native mobile app
+├── packages/shared/          # Shared TypeScript contracts
 ├── docker-compose.yml        # Local PostgreSQL and Redis
-└── .env.example              # Required environment variables
+├── SETUP.md                  # Detailed setup and provider configuration guide
+├── vercel.json               # Vercel routing for frontend + API
+└── .env.example              # Environment variable template
 ```
 
-## Local Setup
+## Technology Stack
+
+Frontend:
+
+- React
+- TypeScript
+- Tailwind CSS
+- Web Speech API for browser voice input
+- Responsive dashboard with light/dark mode
+
+Backend:
+
+- FastAPI
+- Pydantic
+- PostgreSQL
+- Redis-ready orchestration boundary
+- Vercel Python serverless entrypoint
+
+AI and calling:
+
+- OpenAI-compatible planner, extraction, and summary agents
+- Twilio Programmable Voice adapter
+- Demo-mode deterministic fallbacks
+- Architecture supports replacing the call worker with LiveKit Agents or Pipecat for long-running realtime voice sessions
+
+Search:
+
+- Google Places API adapter
+- Demo-mode nearby business fallback
+
+## Local Quickstart
+
+For the full provider-by-provider guide, use [SETUP.md](SETUP.md).
 
 ```bash
 cp .env.example .env
@@ -32,72 +203,122 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
+```
 
-cd ../frontend
+In another terminal:
+
+```bash
+cd frontend
 npm install
 npm run dev
 ```
 
-Open the web app at `http://localhost:5173`. Backend health is available at `http://localhost:8000/health`.
+Open:
+
+- Web app: `http://localhost:5173`
+- Backend health: `http://localhost:8000/health`
 
 ## Environment Variables
 
-`DEMO_MODE=true` keeps the app local and safe. Set it to `false` only after provider configuration is complete.
+`DEMO_MODE=true` is the safe default.
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string for production repository implementation |
-| `REDIS_URL` | Queue backend for Celery/BullMQ/Temporal in later phases |
-| `BACKEND_CORS_ORIGINS` | Comma-separated frontend origins |
-| `PUBLIC_BASE_URL` | Public HTTPS URL for Twilio webhooks |
-| `OPENAI_API_KEY` | Planning, extraction, and summarization |
-| `OPENAI_MODEL` | Configurable GPT model name |
-| `GOOGLE_PLACES_API_KEY` | Nearby business search |
-| `TWILIO_ACCOUNT_SID` | Twilio project SID |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token |
-| `TWILIO_FROM_NUMBER` | Verified outbound caller ID |
-| `MAX_CALLS_PER_TASK` | Hard cap; default and MVP max is 5 |
-| `ALLOW_CALL_RECORDING` | Enables Twilio recording/transcription callbacks when lawful and configured |
-| `VITE_API_BASE_URL` | Frontend API URL |
+| Variable | Required for demo | Required for production | Purpose |
+| --- | --- | --- | --- |
+| `APP_ENV` | Yes | Yes | Runtime environment name |
+| `PUBLIC_BASE_URL` | Yes | Yes | Public API URL for provider callbacks |
+| `DATABASE_URL` | No | Yes | PostgreSQL connection string |
+| `REDIS_URL` | No | Recommended | Queue and workflow backend |
+| `BACKEND_CORS_ORIGINS` | Yes | Yes | Allowed frontend origins |
+| `MAX_CALLS_PER_TASK` | Yes | Yes | Hard call cap |
+| `DEMO_MODE` | Yes | Yes | Enables or disables real providers |
+| `ALLOW_CALL_RECORDING` | Yes | Optional | Enables recordings when lawful |
+| `OPENAI_API_KEY` | No | Yes | LLM planning, extraction, summary |
+| `OPENAI_MODEL` | Yes | Yes | LLM model name |
+| `GOOGLE_PLACES_API_KEY` | No | Yes for nearby search | Google Places search |
+| `TWILIO_ACCOUNT_SID` | No | Yes for calls | Twilio account |
+| `TWILIO_AUTH_TOKEN` | No | Yes for calls | Twilio API auth |
+| `TWILIO_FROM_NUMBER` | No | Yes for calls | Verified or purchased caller ID |
+| `VITE_API_BASE_URL` | Yes locally | Optional on Vercel | Frontend API base URL |
 
-## MVP Flow
+## API Overview
 
-1. User speaks, types, or pastes a general request.
-2. `RequestParserAgent` detects `direct_calls` when phone numbers are present, or `nearby_search` when discovery is needed.
-3. For direct calls, the app creates a contact call list from the provided numbers.
-4. For nearby search, browser/manual location plus optional filters are used for Google Places.
-5. User approves the call list and edits questions.
-6. `VoiceCallAgent` places Twilio calls, or simulates calls in demo mode.
-7. `TranscriptExtractionAgent` converts transcripts into structured outcome JSON.
-8. `SummaryAgent` produces a tracker or comparison table with uncertainty notes.
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/health` | GET | Runtime health and provider status |
+| `/api/tasks/preview` | POST | Parse request and create approval preview |
+| `/api/tasks/{id}/approve-calls` | POST | Approve targets and start calls |
+| `/api/tasks/{id}` | GET | Fetch task detail |
+| `/api/tasks` | GET | List task history |
+| `/api/tasks/{id}/cancel` | POST | Cancel a running task |
+| `/api/tasks/{id}` | DELETE | Delete task history |
 
-## Current Implementation Notes
+See [docs/api.md](docs/api.md) for more detail.
 
-- The backend uses an in-memory task store in demo mode and an optional PostgreSQL store when `DEMO_MODE=false` with `DATABASE_URL` configured.
-- Google Places, Twilio, and OpenAI integrations are implemented behind agent/provider boundaries with demo fallbacks.
-- The web app starts from a natural-language task composer, supports direct phone-number call lists, keeps nearby filters behind an advanced panel, and includes request history, preview approval, question editing, call timeline, transcript viewer, summary, PDF print, email, JSON export, and delete history.
-- Clinic requests such as "Book an appointment with a doctor from Apple Tree at Harbour Street near me" are handled as appointment availability tasks. The agent asks for slots and booking requirements but does not exchange medical details.
-- The mobile app is an Expo-ready shell that mirrors the web flow and shares API contracts.
+## Production Deployment
 
-## Compliance Controls
+This repository is deployed on Vercel with GitHub integration. Merges to `main` trigger production redeploys.
 
-- The call script always discloses that the caller is an AI assistant.
-- Calls are made on behalf of the user and only after explicit approval.
-- Calls are capped to `MAX_CALLS_PER_TASK`.
-- Businesses without phone numbers, closed businesses, and blocked sensitive categories are skipped.
-- The task deletion endpoint removes the task from the active store; production should cascade delete transcripts, recordings, and summaries from persistent storage.
-- Recording is disabled by default and should only be enabled where lawful with provider configuration and retention controls.
+Production setup requires:
+
+1. PostgreSQL database.
+2. Provider secrets in Vercel environment variables.
+3. `DEMO_MODE=false`.
+4. Twilio webhook URLs pointing to the deployed API.
+5. Google Places key restricted by API and origin/server usage.
+6. OpenAI API key with model access.
+7. A retention and compliance policy for call transcripts and recordings.
+
+Recommended production architecture for real realtime calls:
+
+- Keep Vercel for the web dashboard and API facade.
+- Run voice workers separately on LiveKit Cloud, Fly.io, Render, Railway, ECS, or Kubernetes.
+- Use Postgres for durable task state and call artifacts.
+- Use Redis or a workflow engine for retries and long-running orchestration.
+
+## Compliance Model
+
+The product is designed around user-approved, low-volume utility calls.
+
+Rules implemented or represented in the architecture:
+
+- Always disclose the caller is an AI assistant.
+- State the AI is calling on behalf of the user.
+- Do not make marketing or sales calls.
+- Do not call emergency services or sensitive blocked categories.
+- Avoid collecting private personal data.
+- Respect business hours.
+- Do not repeatedly call the same target.
+- Store transcripts securely in production.
+- Allow users to delete task history.
+
+For medical or clinic calls, the agent should ask about appointment availability and booking requirements only. The user should complete booking and exchange medical details directly with the clinic.
 
 ## Verification
 
 ```bash
+npm run build
+
 cd backend
 pytest
-
-cd ../frontend
-npm run build
 ```
 
-## Deployment
+The UI screenshots in this README were generated from the running app with Playwright.
 
-This repo includes `vercel.json`, a root `package.json`, and `api/index.py` so Vercel can deploy the Vite frontend and FastAPI API from the same project. See `docs/deployment.md` for production deployment steps, provider setup, and hardening checklist.
+## Roadmap
+
+- Replace demo-mode calls with production Twilio outbound calls.
+- Add LiveKit Agents voice worker for low-latency realtime conversations.
+- Add durable workflow orchestration for retries, cancellation, and call scheduling.
+- Add authenticated user accounts.
+- Add encrypted transcript and recording storage.
+- Add richer mobile screens in Expo.
+- Add support for salons, clinics, stores, hotels, venues, and appointment-heavy service businesses.
+
+## Documentation
+
+- [SETUP.md](SETUP.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/api.md](docs/api.md)
+- [docs/agent-prompts.md](docs/agent-prompts.md)
+- [docs/twilio-flow.md](docs/twilio-flow.md)
+- [docs/deployment.md](docs/deployment.md)

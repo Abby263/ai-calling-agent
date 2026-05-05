@@ -13,8 +13,10 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger" }) {
   const variants = {
     primary: "border-brand bg-brand text-white hover:bg-blue-700",
-    secondary: "border-slate-300 bg-white text-slate-800 hover:bg-slate-50",
-    ghost: "border-transparent bg-transparent text-slate-700 hover:bg-slate-100",
+    secondary:
+      "border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
+    ghost:
+      "border-transparent bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
     danger: "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
   };
   return (
@@ -28,7 +30,7 @@ export function Button({
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 ${className}`}
+      className={`min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950 ${className}`}
       {...props}
     />
   );
@@ -37,7 +39,7 @@ export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInpu
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 ${className}`}
+      className={`min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950 ${className}`}
       {...props}
     />
   );
@@ -49,7 +51,7 @@ export function Textarea({
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 ${className}`}
+      className={`w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none transition focus:border-brand focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950 ${className}`}
       {...props}
     />
   );
@@ -66,9 +68,9 @@ export function Field({
 }) {
   return (
     <label className="grid gap-1.5 text-sm">
-      <span className="font-medium text-slate-800">{label}</span>
+      <span className="font-medium text-slate-800 dark:text-slate-200">{label}</span>
       {children}
-      {hint ? <span className="text-xs text-slate-500">{hint}</span> : null}
+      {hint ? <span className="text-xs text-slate-500 dark:text-slate-400">{hint}</span> : null}
     </label>
   );
 }

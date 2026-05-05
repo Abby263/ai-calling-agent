@@ -29,11 +29,11 @@ export function ResultsView({ task }: { task: TaskDetail }) {
 
   return (
     <section className="grid gap-4">
-      <div className="rounded-md border border-line bg-white p-5 shadow-soft">
+      <div className="rounded-md border border-line bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="grid gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand">Final summary</p>
-            <h1 className="text-2xl font-semibold text-ink">
+            <h1 className="text-2xl font-semibold text-ink dark:text-white">
               {isDirectCallTask
                 ? "Call outcome tracker"
                 : isAppointmentTask
@@ -67,18 +67,18 @@ export function ResultsView({ task }: { task: TaskDetail }) {
           ].map(([label, value, Icon]) => {
             const MetricIcon = Icon as typeof CheckCircle2;
             return (
-              <div key={label as string} className="rounded-md border border-line bg-panel p-3">
+              <div key={label as string} className="rounded-md border border-line bg-panel p-3 dark:border-slate-800 dark:bg-slate-950">
                 <MetricIcon size={16} className="text-brand" />
-                <p className="mt-2 text-xs font-medium text-slate-500">{label as string}</p>
-                <p className="text-xl font-semibold text-slate-950">{value as number}</p>
+                <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{label as string}</p>
+                <p className="text-xl font-semibold text-slate-950 dark:text-white">{value as number}</p>
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="rounded-md border border-line bg-white p-5 shadow-soft">
-        <p className="max-w-4xl text-base leading-7 text-slate-800">
+      <div className="rounded-md border border-line bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+        <p className="max-w-4xl text-base leading-7 text-slate-800 dark:text-slate-200">
           {task.summary?.final_summary ?? "Summary is not available yet."}
         </p>
         {isDirectCallTask ? (
@@ -120,14 +120,14 @@ export function ResultsView({ task }: { task: TaskDetail }) {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
-        <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+      <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-3 dark:border-slate-800">
           <Table2 size={17} className="text-brand" />
-          <h2 className="font-semibold text-slate-950">Structured results</h2>
+          <h2 className="font-semibold text-slate-950 dark:text-white">Structured results</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead className="bg-panel text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-panel text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-950 dark:text-slate-400">
               {isDirectCallTask ? (
                 <tr>
                   <th className="px-4 py-3">Contact</th>
@@ -157,11 +157,11 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                 </tr>
               )}
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody className="divide-y divide-line dark:divide-slate-800">
               {results.map((result) =>
                 isDirectCallTask ? (
                   <tr key={`${result.target ?? result.restaurant}-${result.phone_number ?? ""}`}>
-                    <td className="px-4 py-3 font-medium text-slate-900">
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
                       {result.target ?? result.restaurant}
                     </td>
                     <td className="px-4 py-3">{result.phone_number ?? "Unknown"}</td>
@@ -170,7 +170,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                         {outcomeLabel(result.outcome)}
                       </Badge>
                     </td>
-                    <td className="max-w-lg px-4 py-3 text-slate-600">
+                    <td className="max-w-lg px-4 py-3 text-slate-600 dark:text-slate-300">
                       {result.answer_summary ?? result.notes}
                     </td>
                     <td className="px-4 py-3">
@@ -186,7 +186,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                   </tr>
                 ) : isAppointmentTask ? (
                   <tr key={result.restaurant}>
-                    <td className="px-4 py-3 font-medium text-slate-900">
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
                       {result.target ?? result.restaurant}
                     </td>
                     <td className="px-4 py-3">
@@ -195,7 +195,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">{result.appointment_time ?? "Unknown"}</td>
-                    <td className="max-w-lg px-4 py-3 text-slate-600">
+                    <td className="max-w-lg px-4 py-3 text-slate-600 dark:text-slate-300">
                       {result.booking_requirements ?? result.appointment_details ?? result.notes}
                     </td>
                     <td className="px-4 py-3">
@@ -213,7 +213,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                   </tr>
                 ) : (
                   <tr key={result.restaurant}>
-                    <td className="px-4 py-3 font-medium text-slate-900">{result.restaurant}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{result.restaurant}</td>
                     <td className="px-4 py-3">{metersToDistance(result.distance_meters)}</td>
                     <td className="px-4 py-3">
                       <Badge className={statusClass(result.happy_hour)}>
@@ -225,7 +225,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                         {triStateLabel(result.vegan_options)}
                       </Badge>
                     </td>
-                    <td className="max-w-md px-4 py-3 text-slate-600">{result.notes}</td>
+                    <td className="max-w-md px-4 py-3 text-slate-600 dark:text-slate-300">{result.notes}</td>
                     <td className="px-4 py-3">
                       {result.recommended ? (
                         <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Recommended</Badge>
@@ -243,9 +243,9 @@ export function ResultsView({ task }: { task: TaskDetail }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {task.calls.map((call) => (
-          <article key={call.id} className="rounded-md border border-line bg-white p-4 shadow-soft">
+          <article key={call.id} className="rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-semibold text-slate-900">{call.business_name}</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-white">{call.business_name}</h2>
               <Badge className={statusClass(call.status)}>{call.status.replace("_", " ")}</Badge>
             </div>
             <div className="mt-3 rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100">
@@ -262,9 +262,9 @@ export function ResultsView({ task }: { task: TaskDetail }) {
 
 function Recommendation({ label, value }: { label: string; value?: unknown }) {
   return (
-    <div className="rounded-md border border-line bg-panel p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 min-h-6 text-sm font-semibold text-slate-900">
+    <div className="rounded-md border border-line bg-panel p-3 dark:border-slate-800 dark:bg-slate-950">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 min-h-6 text-sm font-semibold text-slate-900 dark:text-slate-100">
         {typeof value === "string" && value ? value : "Unknown"}
       </p>
     </div>

@@ -3,8 +3,10 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ListChecks,
+  Moon,
   PhoneCall,
-  ShieldCheck
+  ShieldCheck,
+  Sun
 } from "lucide-react";
 
 import { BusinessPreview } from "./components/BusinessPreview";
@@ -45,6 +47,7 @@ export default function App() {
   const [maxCalls, setMaxCalls] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("theme") === "dark");
 
   const activeId = task?.task.id;
 
@@ -59,6 +62,11 @@ export default function App() {
   useEffect(() => {
     refreshHistory();
   }, [refreshHistory]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    window.localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     if (!task || !["calling", "summarizing"].includes(task.task.status)) {
@@ -190,18 +198,21 @@ export default function App() {
   }, [selectedIds.length, task]);
 
   return (
-    <main className="min-h-screen bg-slate-100 p-3 text-ink sm:p-4">
+    <main className="min-h-screen bg-slate-100 p-3 text-ink dark:bg-slate-950 dark:text-slate-100 sm:p-4">
       <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[18.5rem_minmax(0,1fr)]">
         <div className="order-1 grid gap-4 lg:order-2">
-          <header className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-4 sm:px-5">
+          <header className="overflow-hidden rounded-md border border-line bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-4 dark:border-slate-800 sm:px-5">
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-md bg-slate-950 text-sm font-semibold text-white">
                   VC
                 </span>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-brand">Voice operations console</p>
-                  <h1 className="text-xl font-semibold text-ink">Voice Concierge Agent</h1>
+                  <h1 className="text-xl font-semibold text-ink dark:text-white">Voice Concierge Agent</h1>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                    Natural-language requests become approved outbound calls, transcripts, and structured decisions.
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -212,6 +223,17 @@ export default function App() {
                   <ShieldCheck size={13} />
                   AI disclosure
                 </Badge>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 w-10 px-0"
+                  aria-label={darkMode ? "Use light mode" : "Use dark mode"}
+                  aria-pressed={darkMode}
+                  title={darkMode ? "Use light mode" : "Use dark mode"}
+                  onClick={() => setDarkMode((value) => !value)}
+                >
+                  {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                </Button>
                 <Button type="button" variant="secondary" onClick={startNewTask}>
                   New task
                 </Button>
@@ -233,7 +255,7 @@ export default function App() {
                       className={`flex min-h-12 items-center gap-2 rounded-md border px-3 text-left text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
                         stage === item.value
                           ? "border-brand bg-brand text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
                       }`}
                     >
                       <span
@@ -253,11 +275,11 @@ export default function App() {
                   );
                 })}
               </nav>
-              <div className="grid grid-cols-4 overflow-hidden rounded-md border border-line bg-panel">
+              <div className="grid grid-cols-4 overflow-hidden rounded-md border border-line bg-panel dark:border-slate-800 dark:bg-slate-950">
                 {taskStats.map((stat) => (
-                  <div key={stat.label} className="border-r border-line px-3 py-2 last:border-r-0">
-                    <p className="text-xs font-medium text-slate-500">{stat.label}</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-950">{stat.value}</p>
+                  <div key={stat.label} className="border-r border-line px-3 py-2 last:border-r-0 dark:border-slate-800">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{stat.value}</p>
                   </div>
                 ))}
               </div>

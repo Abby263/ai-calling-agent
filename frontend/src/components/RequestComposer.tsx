@@ -87,13 +87,16 @@ export function RequestComposer({
   return (
     <section className="grid gap-4">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
+        <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4 dark:border-slate-800">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-brand">New concierge task</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                What should the agent handle?
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                What should the agent call, ask, or book?
               </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Write the request naturally. The agent will separate direct phone lists from nearby searches and prepare a review queue before any call is made.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border-sky-200 bg-sky-50 text-sky-700">
@@ -113,7 +116,7 @@ export function RequestComposer({
               onChange={(event) => setRequestText(event.target.value)}
               rows={8}
               placeholder={EXAMPLES[0].text}
-              className="min-h-48 bg-slate-50 text-base leading-7"
+              className="min-h-48 bg-slate-50 text-base leading-7 dark:bg-slate-950"
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
@@ -138,12 +141,16 @@ export function RequestComposer({
                 {loading ? "Preparing" : "Build approval queue"}
               </Button>
             </div>
-            {error ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p> : null}
+            {error ? (
+              <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+                {error}
+              </p>
+            ) : null}
           </div>
         </div>
 
         <aside className="grid content-start gap-4">
-          <div className="rounded-md border border-slate-800 bg-slate-950 p-5 text-white shadow-soft">
+          <div className="rounded-md border border-slate-800 bg-slate-950 p-5 text-white shadow-soft dark:border-slate-700">
             <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
               <Route size={16} />
               Task route
@@ -168,12 +175,12 @@ export function RequestComposer({
             </div>
           </div>
 
-          <div className="rounded-md border border-line bg-white p-5 shadow-soft">
+          <div className="rounded-md border border-line bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2">
               <PhoneOutgoing size={17} className="text-brand" />
-              <h2 className="font-semibold text-slate-950">Outbound policy</h2>
+              <h2 className="font-semibold text-slate-950 dark:text-white">Outbound policy</h2>
             </div>
-            <div className="mt-4 grid gap-3 text-sm text-slate-600">
+            <div className="mt-4 grid gap-3 text-sm text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 AI caller disclosure
@@ -191,9 +198,9 @@ export function RequestComposer({
         </aside>
       </div>
 
-      <div className="rounded-md border border-line bg-white p-4 shadow-soft">
+      <div className="rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-slate-950">Fast starters</h2>
+          <h2 className="font-semibold text-slate-950 dark:text-white">Common concierge requests</h2>
           <Badge className="border-slate-200 bg-slate-100 text-slate-600">
             <CalendarPlus size={13} />
             Voice or text
@@ -207,12 +214,12 @@ export function RequestComposer({
                 key={example.label}
                 type="button"
                 onClick={() => setRequestText(example.text)}
-                className="grid min-h-24 gap-2 rounded-md border border-line bg-panel p-3 text-left transition hover:border-brand hover:bg-blue-50"
+                className="grid min-h-24 gap-2 rounded-md border border-line bg-panel p-3 text-left transition hover:border-brand hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-brand shadow-sm">
+                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-brand shadow-sm dark:bg-slate-900">
                   <Icon size={16} />
                 </span>
-                <span className="text-sm font-semibold text-slate-900">{example.label}</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{example.label}</span>
               </button>
             );
           })}
@@ -220,11 +227,11 @@ export function RequestComposer({
       </div>
 
       {showNearbyOptions ? (
-        <div className="grid gap-4 rounded-md border border-line bg-white p-4 shadow-soft">
+        <div className="grid gap-4 rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold">Nearby business search</h2>
-              <p className="text-sm text-slate-500">Used only when the request needs location-based discovery.</p>
+              <h2 className="text-base font-semibold dark:text-white">Nearby business search</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Used only when the request needs location-based discovery.</p>
             </div>
             <Button type="button" onClick={captureLocation} variant="secondary">
               <LocateFixed size={16} />
