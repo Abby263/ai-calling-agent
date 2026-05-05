@@ -314,6 +314,12 @@ The UI screenshots in this README were generated from the running app with Playw
 - Add richer mobile screens in Expo.
 - Add support for salons, clinics, stores, hotels, venues, and appointment-heavy service businesses.
 
+## License
+
+This repository is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+Commercial use is not permitted without a separate written commercial license from the repository owner. AGPL was not used because AGPL allows commercial use; this project needs a non-commercial restriction.
+
 ## Documentation
 
 - [SETUP.md](SETUP.md)
