@@ -56,6 +56,8 @@ class TaskOrchestrator:
 
     async def approve_calls(self, task_id: str, payload: ApproveCallsRequest) -> TaskDetail:
         detail = self.store.get_task(task_id)
+        if not detail and payload.task_snapshot and payload.task_snapshot.task.id == task_id:
+            detail = self.store.save_task(payload.task_snapshot)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
         if detail.task.status in {TaskStatus.CANCELLED, TaskStatus.COMPLETED}:
@@ -99,4 +101,3 @@ class TaskOrchestrator:
         summary = await self.summary.summarize(detail)
         self.store.set_summary(task_id, summary)
         return self.store.get_task(task_id) or detail
-

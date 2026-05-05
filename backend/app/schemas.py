@@ -175,6 +175,7 @@ class ApproveCallsRequest(BaseModel):
     questions: list[Question]
     max_calls: int = Field(default=5, ge=1, le=5)
     preferred_call_time: str | None = None
+    task_snapshot: TaskDetail | None = None
 
 
 class TaskListItem(BaseModel):

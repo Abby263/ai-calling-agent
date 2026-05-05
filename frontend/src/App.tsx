@@ -102,7 +102,8 @@ export default function App() {
         business_ids: selectedIds,
         questions: questions.filter((question) => question.text.trim()),
         max_calls: maxCalls,
-        preferred_call_time: filters.preferred_call_time
+        preferred_call_time: filters.preferred_call_time,
+        task_snapshot: task
       });
       setTask(updated);
       setStage(updated.summary ? "results" : "progress");

@@ -214,4 +214,5 @@ export interface ApproveCallsRequest {
   questions: Question[];
   max_calls: number;
   preferred_call_time?: string | null;
+  task_snapshot?: TaskDetail;
 }

@@ -117,3 +117,29 @@ async def test_doctor_appointment_request_targets_clinic_and_extracts_availabili
     assert first.appointment_available == "yes"
     assert first.appointment_time is not None
     assert "health card" in (first.booking_requirements or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_approval_can_use_task_snapshot_for_serverless_demo_invocation():
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    preview_orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
+    preview = await preview_orchestrator.preview(
+        TaskPreviewRequest(
+            original_request="Find happy hours near me and ask if they have vegan food.",
+            filters=SearchFilters(max_calls=1),
+        )
+    )
+
+    fresh_orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
+    approved = await fresh_orchestrator.approve_calls(
+        preview.task.id,
+        ApproveCallsRequest(
+            business_ids=[preview.businesses[0].id],
+            questions=preview.editable_questions,
+            max_calls=1,
+            task_snapshot=preview,
+        ),
+    )
+
+    assert approved.task.status == "completed"
+    assert approved.summary is not None
