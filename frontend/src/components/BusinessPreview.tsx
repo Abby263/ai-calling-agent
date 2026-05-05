@@ -5,6 +5,8 @@ import {
   Phone,
   Plus,
   ShieldCheck,
+  Sparkles,
+  Star,
   Trash2
 } from "lucide-react";
 
@@ -62,51 +64,70 @@ export function BusinessPreview({
   }
 
   return (
-    <section className="grid gap-4">
-      <div className="rounded-md border border-line bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <section className="grid gap-5">
+      <div className="surface-strong relative overflow-hidden p-5 sm:p-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-brand-gradient opacity-10 blur-3xl"
+        />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Approval queue</p>
-            <h1 className="mt-1 text-2xl font-semibold text-ink dark:text-white">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+              <Sparkles size={11} />
+              Approval queue
+            </p>
+            <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.7rem]">
               Approve {targetLabelPlural} and questions
             </h1>
+            <p className="mt-1.5 max-w-xl text-sm text-slate-600 dark:text-slate-400">
+              Review the queue, refine the script, then approve. The agent will only call selected targets.
+            </p>
           </div>
-          <div className="grid w-full grid-cols-3 overflow-hidden rounded-md border border-line bg-panel dark:border-slate-800 dark:bg-slate-950 sm:w-auto sm:min-w-80">
+          <div className="grid w-full grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/70 dark:bg-panel-gradient-dark sm:w-auto sm:min-w-[22rem]">
             {[
               ["Selected", selectedIds.length],
               ["Limit", maxCalls],
               ["Questions", approvedQuestions]
-            ].map(([label, value]) => (
-              <div key={label} className="border-r border-line px-3 py-2 last:border-r-0 dark:border-slate-800">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{value}</p>
+            ].map(([label, value], index, arr) => (
+              <div
+                key={label}
+                className={`px-4 py-3 ${index < arr.length - 1 ? "border-r border-slate-200/70 dark:border-slate-800/70" : ""}`}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                  {label}
+                </p>
+                <p className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
+                  {value}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
-        <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 dark:border-slate-800">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="surface-strong overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-5 py-3.5 dark:border-slate-800/70">
             <div className="flex items-center gap-2">
-              <ClipboardList size={17} className="text-brand" />
-              <h2 className="font-semibold text-slate-950 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300">
+                <ClipboardList size={16} />
+              </span>
+              <h2 className="font-display text-base font-semibold text-slate-950 dark:text-white">
                 {task.businesses.length} {targetLabelPlural}
               </h2>
             </div>
-            <Badge className="border-amber-200 bg-amber-50 text-amber-800">
+            <Badge className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
               {selectedIds.length}/{maxCalls} queued
             </Badge>
           </div>
-          <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-line bg-panel px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 max-lg:hidden">
+          <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-800/70 dark:bg-slate-950/40 dark:text-slate-400 max-lg:hidden">
             <span />
             <span>{isDirectCallTask ? "Contact" : "Business"}</span>
             <span>{isDirectCallTask ? "Phone" : "Distance"}</span>
             <span>{isDirectCallTask ? "Source" : "Rating"}</span>
             <span>Status</span>
           </div>
-          <div className="divide-y divide-line">
+          <div className="divide-y divide-slate-200/70 dark:divide-slate-800/70">
             {task.businesses.map((business) => {
               const selected = selectedSet.has(business.id);
               return (
@@ -114,30 +135,32 @@ export function BusinessPreview({
                   key={business.id}
                   type="button"
                   onClick={() => toggleBusiness(business.id)}
-                  className={`grid w-full gap-3 px-4 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
+                  className={`grid w-full gap-3 px-5 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
                     selected
-                      ? "bg-blue-50/70 hover:bg-blue-50 dark:bg-blue-950/30 dark:hover:bg-blue-950/40"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                      ? "bg-brand-50/60 hover:bg-brand-50 dark:bg-brand-950/30 dark:hover:bg-brand-950/40"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-900/50"
                   }`}
                 >
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-md border ${
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition ${
                       selected
-                        ? "border-brand bg-brand text-white"
-                        : "border-slate-300 bg-white text-transparent dark:border-slate-700 dark:bg-slate-950"
+                        ? "border-transparent bg-brand-gradient text-white shadow-soft"
+                        : "border-slate-300 bg-white text-transparent group-hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
                     }`}
                   >
-                    <Check size={16} />
+                    <Check size={15} strokeWidth={3} />
                   </span>
                   <span className="grid gap-1">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{business.name}</span>
+                    <span className="font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                      {business.name}
+                    </span>
                     <span className="text-sm text-slate-600 dark:text-slate-400">
                       {isDirectCallTask ? "User-provided number" : business.address}
                     </span>
-                    <span className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                       {business.phone ? (
                         <span className="inline-flex items-center gap-1">
-                          <Phone size={13} />
+                          <Phone size={12} />
                           {business.phone}
                         </span>
                       ) : (
@@ -145,17 +168,27 @@ export function BusinessPreview({
                       )}
                       {business.website ? (
                         <span className="inline-flex items-center gap-1">
-                          <ExternalLink size={13} />
+                          <ExternalLink size={12} />
                           Website
+                        </span>
+                      ) : null}
+                      {!isDirectCallTask && business.rating ? (
+                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <Star size={12} fill="currentColor" />
+                          {business.rating}
                         </span>
                       ) : null}
                     </span>
                   </span>
-                  <span className="text-sm text-slate-700 dark:text-slate-300">
-                    {isDirectCallTask ? business.phone ?? "No phone" : metersToDistance(business.distance_meters)}
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {isDirectCallTask
+                      ? business.phone ?? "No phone"
+                      : metersToDistance(business.distance_meters)}
                   </span>
                   <span className="text-sm text-slate-700 dark:text-slate-300">
-                    {isDirectCallTask ? "Direct" : `${business.rating ?? "N/A"} · ${priceLabel(business.price_level)}`}
+                    {isDirectCallTask
+                      ? "Direct"
+                      : `${business.rating ?? "—"} · ${priceLabel(business.price_level)}`}
                   </span>
                   <span>
                     <Badge className={statusClass(business.open_now ? "completed" : "unknown")}>
@@ -168,10 +201,13 @@ export function BusinessPreview({
           </div>
         </div>
 
-        <aside className="grid content-start gap-4 rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900 xl:sticky xl:top-4">
-          <div className="rounded-md border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Detected objective</p>
-            <p className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-200">
+        <aside className="surface-strong grid content-start gap-4 p-5 xl:sticky xl:top-6">
+          <div className="rounded-xl border border-brand-100 bg-brand-50/70 p-3 dark:border-brand-900/40 dark:bg-brand-950/30">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+              <Sparkles size={11} />
+              Detected objective
+            </p>
+            <p className="mt-1.5 text-sm leading-6 text-slate-700 dark:text-slate-200">
               {task.task.parsed_intent_json.call_objective}
             </p>
           </div>
@@ -188,7 +224,9 @@ export function BusinessPreview({
 
           <div className="grid gap-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold dark:text-white">Approved call questions</h2>
+              <h2 className="font-display text-base font-semibold text-slate-950 dark:text-white">
+                Approved call questions
+              </h2>
               <Button
                 type="button"
                 variant="ghost"
@@ -221,7 +259,7 @@ export function BusinessPreview({
                   title="Remove question"
                   onClick={() => removeQuestion(question.id)}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={15} />
                 </Button>
               </div>
             ))}
@@ -235,15 +273,23 @@ export function BusinessPreview({
               type="button"
               onClick={onApprove}
               disabled={loading || selectedIds.length === 0 || questions.every((question) => !question.text.trim())}
+              className="flex-1 px-5"
             >
-              <Phone size={16} />
-              {loading
-                ? "Starting calls"
-                : `Call ${selectedIds.length} ${selectedIds.length === 1 ? targetLabel : targetLabelPlural}`}
+              {loading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  Starting calls
+                </>
+              ) : (
+                <>
+                  <Phone size={15} />
+                  Call {selectedIds.length} {selectedIds.length === 1 ? targetLabel : targetLabelPlural}
+                </>
+              )}
             </Button>
           </div>
-          <div className="flex items-start gap-2 rounded-md border border-line bg-panel p-3 text-xs leading-5 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-            <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-700" />
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0" />
             <span>
               The call opens with AI disclosure and a no-sales statement. Do not approve numbers
               that should not be contacted.
