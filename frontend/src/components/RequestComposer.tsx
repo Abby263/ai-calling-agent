@@ -4,6 +4,7 @@ import {
   ChevronUp,
   ClipboardCheck,
   LocateFixed,
+  MapPin,
   Mic,
   PhoneCall,
   PhoneOutgoing,
@@ -11,6 +12,7 @@ import {
   Send,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Square,
   Stethoscope,
   Utensils,
@@ -26,24 +28,39 @@ import { Badge, Button, Field, Input, Select, Textarea } from "./ui";
 const EXAMPLES = [
   {
     label: "Dinner RSVP",
+    detail: "Invite friends and track who says yes",
     icon: Users,
+    accent: "from-rose-500/15 to-orange-500/10 text-rose-600 dark:text-rose-300",
     text: "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes."
   },
   {
     label: "Doctor appointment",
+    detail: "Find a clinic with same-day availability",
     icon: Stethoscope,
+    accent: "from-emerald-500/15 to-teal-500/10 text-emerald-600 dark:text-emerald-300",
     text: "Book an appointment with a doctor from Apple Tree at Harbour Street near me."
   },
   {
     label: "Restaurant research",
+    detail: "Compare happy hours and dietary options",
     icon: Utensils,
+    accent: "from-amber-500/15 to-orange-500/10 text-amber-700 dark:text-amber-300",
     text: "Find happy hours near me and ask if they have vegan food."
   },
   {
     label: "Project check-in",
+    detail: "Coordinate availability across a team",
     icon: ClipboardCheck,
+    accent: "from-sky-500/15 to-indigo-500/10 text-sky-600 dark:text-sky-300",
     text: "Call these numbers and ask who is available for a project check-in tomorrow morning."
   }
+];
+
+const ROUTE_STEPS = [
+  ["01", "Parse request", "Pull intent, contacts, and places"],
+  ["02", "Review queue", "Choose targets and approve questions"],
+  ["03", "Run calls", "Live status, transcript, extraction"],
+  ["04", "Compare results", "Recommendation with evidence"]
 ];
 
 export function RequestComposer({
@@ -70,6 +87,7 @@ export function RequestComposer({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [showNearbyOptions, setShowNearbyOptions] = useState(false);
   const speech = useSpeechInput((text) => setRequestText(text));
+  const charCount = requestText.trim().length;
 
   async function captureLocation() {
     setLocationError(null);
@@ -85,41 +103,54 @@ export function RequestComposer({
   }
 
   return (
-    <section className="grid gap-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="overflow-hidden rounded-md border border-line bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4 dark:border-slate-800">
+    <section className="grid gap-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="surface-strong relative overflow-hidden">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-brand-gradient opacity-10 blur-3xl"
+          />
+          <div className="relative flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand">New concierge task</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+                <Sparkles size={11} />
+                New concierge task
+              </p>
+              <h2 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.7rem]">
                 What should the agent call, ask, or book?
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-                Write the request naturally. The agent will separate direct phone lists from nearby searches and prepare a review queue before any call is made.
+                Write the request naturally. The agent separates direct phone lists from nearby searches and prepares a review queue before any call is placed.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge className="border-sky-200 bg-sky-50 text-sky-700">
-                <PhoneCall size={13} />
+              <Badge className="border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-300">
+                <PhoneCall size={12} />
                 Calls
               </Badge>
-              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                <ShieldCheck size={13} />
-                Approval
+              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <ShieldCheck size={12} />
+                Approval gated
               </Badge>
             </div>
           </div>
 
-          <div className="grid gap-4 p-5">
-            <Textarea
-              value={requestText}
-              onChange={(event) => setRequestText(event.target.value)}
-              rows={8}
-              placeholder={EXAMPLES[0].text}
-              className="min-h-48 bg-slate-50 text-base leading-7 dark:bg-slate-950"
-            />
+          <div className="relative grid gap-4 px-6 pb-6 pt-5">
+            <div className="relative">
+              <Textarea
+                value={requestText}
+                onChange={(event) => setRequestText(event.target.value)}
+                rows={8}
+                placeholder={EXAMPLES[0].text}
+                className="min-h-48 bg-slate-50/70 text-base leading-7 dark:bg-slate-950/60"
+              />
+              <div className="pointer-events-none absolute bottom-3 right-4 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                {charCount} characters
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant={speech.listening ? "danger" : "secondary"}
@@ -127,22 +158,59 @@ export function RequestComposer({
                   disabled={!speech.supported}
                   title={speech.supported ? "Use voice input" : "Voice input is not supported in this browser"}
                 >
-                  {speech.listening ? <Square size={16} /> : <Mic size={16} />}
-                  {speech.listening ? "Stop" : "Speak"}
+                  {speech.listening ? (
+                    <>
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping-slow rounded-full bg-rose-500 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                      </span>
+                      <Square size={14} />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={15} />
+                      Speak
+                    </>
+                  )}
                 </Button>
-                <Button type="button" variant="ghost" onClick={() => setShowNearbyOptions(!showNearbyOptions)}>
-                  <SlidersHorizontal size={16} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowNearbyOptions(!showNearbyOptions)}
+                >
+                  <SlidersHorizontal size={15} />
                   Nearby options
-                  {showNearbyOptions ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  {showNearbyOptions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </Button>
+                {location.label ? (
+                  <Badge className="border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                    <MapPin size={11} />
+                    {location.label}
+                  </Badge>
+                ) : null}
               </div>
-              <Button type="button" onClick={onPreview} disabled={loading || requestText.trim().length < 4}>
-                <Send size={16} />
-                {loading ? "Preparing" : "Build approval queue"}
+              <Button
+                type="button"
+                onClick={onPreview}
+                disabled={loading || charCount < 4}
+                className="px-5"
+              >
+                {loading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    Preparing
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} />
+                    Build approval queue
+                  </>
+                )}
               </Button>
             </div>
             {error ? (
-              <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+              <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
                 {error}
               </p>
             ) : null}
@@ -150,63 +218,82 @@ export function RequestComposer({
         </div>
 
         <aside className="grid content-start gap-4">
-          <div className="rounded-md border border-slate-800 bg-slate-950 p-5 text-white shadow-soft dark:border-slate-700">
-            <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
-              <Route size={16} />
-              Task route
-            </div>
-            <div className="mt-5 grid gap-4">
-              {[
-                ["01", "Parse request", "intent, contacts, places"],
-                ["02", "Review queue", "targets and questions"],
-                ["03", "Run calls", "status, transcript, extraction"],
-                ["04", "Compare results", "recommendation and evidence"]
-              ].map(([step, title, detail]) => (
-                <div key={step} className="grid grid-cols-[2.25rem_1fr] gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-md border border-white/15 bg-white/10 text-xs font-semibold text-cyan-100">
-                    {step}
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">{title}</p>
-                    <p className="text-xs text-slate-400">{detail}</p>
+          <div className="relative overflow-hidden rounded-2xl bg-slate-950 p-5 text-white shadow-lifted">
+            <div
+              aria-hidden
+              className="absolute inset-0 opacity-80"
+              style={{
+                background:
+                  "radial-gradient(60% 80% at 0% 0%, rgba(99,102,241,0.45) 0%, transparent 50%), radial-gradient(50% 60% at 100% 100%, rgba(6,182,212,0.32) 0%, transparent 60%)"
+              }}
+            />
+            <div className="relative">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200">
+                <Route size={13} />
+                Task route
+              </div>
+              <h3 className="mt-2 font-display text-lg font-semibold tracking-tight">
+                How the agent works
+              </h3>
+              <div className="mt-5 grid gap-3.5">
+                {ROUTE_STEPS.map(([step, title, detail]) => (
+                  <div key={step} className="grid grid-cols-[2.25rem_1fr] gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-xs font-bold text-cyan-200">
+                      {step}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold leading-tight">{title}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-md border border-line bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+          <div className="surface-strong p-5">
             <div className="flex items-center gap-2">
-              <PhoneOutgoing size={17} className="text-brand" />
-              <h2 className="font-semibold text-slate-950 dark:text-white">Outbound policy</h2>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300">
+                <PhoneOutgoing size={15} />
+              </span>
+              <h2 className="font-display text-base font-semibold text-slate-950 dark:text-white">
+                Outbound policy
+              </h2>
             </div>
-            <div className="mt-4 grid gap-3 text-sm text-slate-600 dark:text-slate-300">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                AI caller disclosure
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-sky-500" />
+            <ul className="mt-4 grid gap-2.5 text-sm text-slate-600 dark:text-slate-300">
+              <li className="flex items-start gap-2.5">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                AI caller disclosure on every call
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
                 User-approved targets only
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                 No sensitive data collection
-              </div>
-            </div>
+              </li>
+            </ul>
           </div>
         </aside>
       </div>
 
-      <div className="rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+      <div className="surface-strong p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-slate-950 dark:text-white">Common concierge requests</h2>
-          <Badge className="border-slate-200 bg-slate-100 text-slate-600">
-            <CalendarPlus size={13} />
+          <div>
+            <h2 className="font-display text-lg font-semibold text-slate-950 dark:text-white">
+              Common concierge requests
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+              Tap a template to prefill the request — edit freely.
+            </p>
+          </div>
+          <Badge className="border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+            <CalendarPlus size={12} />
             Voice or text
           </Badge>
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {EXAMPLES.map((example) => {
             const Icon = example.icon;
             return (
@@ -214,12 +301,25 @@ export function RequestComposer({
                 key={example.label}
                 type="button"
                 onClick={() => setRequestText(example.text)}
-                className="grid min-h-24 gap-2 rounded-md border border-line bg-panel p-3 text-left transition hover:border-brand hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800"
+                className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-soft dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-brand-700"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-brand shadow-sm dark:bg-slate-900">
-                  <Icon size={16} />
-                </span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{example.label}</span>
+                <div
+                  aria-hidden
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition group-hover:opacity-100 ${example.accent}`}
+                />
+                <div className="relative">
+                  <span
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition group-hover:border-transparent group-hover:bg-brand-gradient group-hover:text-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200`}
+                  >
+                    <Icon size={17} />
+                  </span>
+                  <p className="mt-3 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                    {example.label}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    {example.detail}
+                  </p>
+                </div>
               </button>
             );
           })}
@@ -227,18 +327,22 @@ export function RequestComposer({
       </div>
 
       {showNearbyOptions ? (
-        <div className="grid gap-4 rounded-md border border-line bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+        <div className="surface-strong animate-fade-in p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold dark:text-white">Nearby business search</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Used only when the request needs location-based discovery.</p>
+              <h2 className="font-display text-base font-semibold text-slate-950 dark:text-white">
+                Nearby business search
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Used only when the request needs location-based discovery.
+              </p>
             </div>
             <Button type="button" onClick={captureLocation} variant="secondary">
-              <LocateFixed size={16} />
+              <LocateFixed size={15} />
               Use my location
             </Button>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Field label="Manual location">
               <Input
                 value={location.label ?? ""}
@@ -272,8 +376,8 @@ export function RequestComposer({
                 placeholder="-79.3832"
               />
             </Field>
-            <Field label="Radius">
-              <div className="grid grid-cols-[1fr_5rem] gap-3">
+            <Field label="Radius (m)">
+              <div className="grid grid-cols-[1fr_5rem] items-center gap-3">
                 <input
                   type="range"
                   min={500}
@@ -281,7 +385,7 @@ export function RequestComposer({
                   step={500}
                   value={filters.radius_meters}
                   onChange={(event) => updateFilter("radius_meters", Number(event.target.value))}
-                  className="w-full accent-brand"
+                  className="w-full accent-brand-600"
                 />
                 <Input
                   type="number"
@@ -339,7 +443,11 @@ export function RequestComposer({
               />
             </Field>
           </div>
-          {locationError ? <p className="text-sm text-rose-700">{locationError}</p> : null}
+          {locationError ? (
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-2 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+              {locationError}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
