@@ -13,6 +13,9 @@ The app is intentionally not limited to restaurant filters. Users can type or sp
 
 Live Vercel app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
 
+- Landing page: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
+- App console: [https://ai-calling-agent-snowy.vercel.app/app](https://ai-calling-agent-snowy.vercel.app/app)
+
 > Current deployment runs in `DEMO_MODE=true`. It demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
 
 ## Product Summary
@@ -36,7 +39,7 @@ Safety controls:
 
 ## UI Demo
 
-There is no recorded demo video in this repository yet. The screenshots below are refreshed from the current production-style dashboard flow.
+There is no recorded demo video in this repository yet. The deployed app now opens with a product landing page first, then routes users into the production-style dashboard flow shown below.
 
 ### 1. Natural-Language Intake
 
