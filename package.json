@@ -1,0 +1,14 @@
+{
+  "name": "voice-concierge-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm ci --prefix frontend && npm run build --prefix frontend",
+    "dev": "npm run dev --prefix frontend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+
