@@ -11,7 +11,7 @@ Example requests:
 
 The app is intentionally not limited to restaurant filters. Users can type or speak general requests, provide phone numbers directly, or ask the system to discover nearby businesses first.
 
-Live app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
+Live Vercel app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
 
 > Current deployment runs in `DEMO_MODE=true`. It demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
 
@@ -36,11 +36,11 @@ Safety controls:
 
 ## UI Demo
 
-There is no recorded demo video in this repository yet. The screenshots below show the production MVP flow.
+There is no recorded demo video in this repository yet. The screenshots below are refreshed from the current production-style dashboard flow.
 
 ### 1. Natural-Language Intake
 
-The user starts with a general request. The app can handle direct phone lists, appointment requests, or nearby discovery.
+The user starts with a general request. The dashboard makes it clear that the app can handle direct phone lists, appointment requests, or nearby discovery.
 
 ![Voice Concierge intake screen](docs/assets/ui-intake.png)
 
@@ -52,7 +52,7 @@ The app parses the request, creates call targets, proposes questions, and waits 
 
 ### 3. Structured Results
 
-After calls complete, the app shows the summary, structured table, call outcomes, transcripts, and export options.
+After calls complete, the app shows the summary, structured table, call outcomes, transcript evidence, and export options.
 
 ![Voice Concierge results screen](docs/assets/ui-results.png)
 
@@ -256,7 +256,7 @@ See [docs/api.md](docs/api.md) for more detail.
 
 ## Production Deployment
 
-This repository is deployed on Vercel with GitHub integration. Merges to `main` trigger production redeploys.
+This repository is deployed on Vercel at [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app) with GitHub integration. Merges to `main` trigger production redeploys.
 
 Production setup requires:
 
