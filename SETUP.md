@@ -257,6 +257,11 @@ Admin accounts bypass this limit:
 ADMIN_EMAILS=founder@example.com,ops@example.com
 ```
 
+`ADMIN_EMAILS` matches the signed-in user's primary Clerk email. The backend first checks the Clerk
+session token and, if the token does not include an email claim, fetches the user profile from
+Clerk's Backend API using `CLERK_SECRET_KEY`. After changing `ADMIN_EMAILS`, redeploy production and
+open `/api/auth/session` while signed in; the `billing.plan` field should be `admin`.
+
 If you prefer to identify an admin by the stable Clerk subject instead of email, open the Clerk user
 profile, copy the `user_...` subject, and add:
 

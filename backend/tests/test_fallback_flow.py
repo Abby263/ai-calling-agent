@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -9,13 +10,13 @@ from app.schemas import (
     ApproveCallsRequest,
     CallRecord,
     CallStatus,
+    ParsedIntent,
     Question,
     SearchFilters,
     TaskPreviewRequest,
     TaskStatus,
 )
-from app.schemas import ParsedIntent
-
+from app.services import auth as auth_module
 from app.services.agents.conversation import (
     CALL_CLOSING_LINE,
     DISCLOSURE_LINE,
@@ -26,6 +27,7 @@ from app.services.agents.conversation import (
     _truncate_words,
     disclosure_for,
 )
+from app.services.auth import ClerkAuthService, ClerkUserProfile, _billing_payload
 from app.services.compliance import build_turn_prompt
 from app.services.orchestrator import TaskOrchestrator
 
@@ -49,6 +51,40 @@ def test_clerk_secret_configures_auth_gate():
     assert settings.auth_required is True
     assert settings.auth_configured is True
     assert settings.clerk_jwks_endpoint == "https://api.clerk.com/v1/jwks"
+
+
+def test_admin_email_can_be_resolved_from_clerk_profile(monkeypatch):
+    settings = Settings(
+        APP_ENV="production",
+        DEMO_MODE=False,
+        CLERK_SECRET_KEY="sk_test_demo",
+        ADMIN_EMAILS="admin@example.com",
+    )
+    store = InMemoryTaskStore()
+    request = SimpleNamespace(
+        headers={"authorization": "Bearer test-token"},
+        cookies={},
+        app=SimpleNamespace(state=SimpleNamespace(settings=settings, store=store)),
+    )
+    service = ClerkAuthService(settings)
+    monkeypatch.setattr(service, "_verify_token", lambda _token: {"sub": "user_admin"})
+    monkeypatch.setattr(
+        auth_module,
+        "_clerk_user_profile",
+        lambda _secret, _subject: ClerkUserProfile(
+            email="Admin@Example.com",
+            name="Admin User",
+        ),
+    )
+
+    session = service.get_session(request, raise_errors=True)
+    payload = _billing_payload(request, settings, session)
+
+    assert session is not None
+    assert session.email == "Admin@Example.com"
+    assert payload["plan"] == "admin"
+    assert payload["unlimited"] is True
+    assert payload["remaining_requests"] is None
 
 
 def test_livekit_calling_requires_runtime_and_outbound_trunk():
