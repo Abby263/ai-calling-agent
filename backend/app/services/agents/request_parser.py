@@ -8,7 +8,6 @@ from uuid import uuid4
 from app.core.config import Settings
 from app.schemas import ParsedIntent, Question, SearchFilters, TaskPreviewRequest
 
-
 SYSTEM_PROMPT = """You are RequestParserAgent for a voice concierge app.
 Return only valid JSON. The app supports:
 1. direct_calls: user provides phone numbers and asks the agent to call them for a general purpose.
@@ -89,7 +88,10 @@ class RequestParserAgent:
             search_target = "nearby stores"
 
         radius = filters.radius_meters
-        radius_match = re.search(r"(\d+(?:\.\d+)?)\s*(km|kilometer|kilometers|mi|mile|miles|m)\b", text)
+        radius_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*(km|kilometer|kilometers|mi|mile|miles|m)\b",
+            text,
+        )
         if radius_match:
             value = float(radius_match.group(1))
             unit = radius_match.group(2)
@@ -193,7 +195,9 @@ class RequestParserAgent:
         )
 
     def _default_questions(self, text: str, dietary: str | None) -> list[Question]:
-        if any(word in text for word in ["doctor", "clinic", "physician", "medical", "appointment"]):
+        if any(
+            word in text for word in ["doctor", "clinic", "physician", "medical", "appointment"]
+        ):
             return self._appointment_questions(text)
 
         questions = [
@@ -205,7 +209,10 @@ class RequestParserAgent:
             questions.extend(
                 [
                     f"Do you offer {dietary} meal options?",
-                    f"Are the {dietary} options dedicated menu items, or do they require customization?",
+                    (
+                        f"Are the {dietary} options dedicated menu items, "
+                        "or do they require customization?"
+                    ),
                 ]
             )
         questions.append("Do guests usually need a reservation today?")
@@ -222,12 +229,19 @@ class RequestParserAgent:
         clinic_hint = " at Apple Tree near Harbour Street" if "apple tree" in text else ""
         questions = [
             (
-                f"I am calling on behalf of a user who wants to book a doctor's appointment{clinic_hint}. "
+                "I am calling on behalf of a user who wants to book a doctor's "
+                f"appointment{clinic_hint}. "
                 "Do you have doctor appointment availability?"
             ),
             "What is the earliest available appointment time or next booking window?",
-            "Can the user book by phone or online, and what non-medical information is required to complete booking?",
-            "Is this the correct location near Harbour Street, or is there another nearby branch they should contact?",
+            (
+                "Can the user book by phone or online, and what non-medical information "
+                "is required to complete booking?"
+            ),
+            (
+                "Is this the correct location near Harbour Street, or is there another "
+                "nearby branch they should contact?"
+            ),
         ]
         return [Question(id=f"q_{uuid4().hex[:8]}", text=question) for question in questions]
 
@@ -248,14 +262,25 @@ class RequestParserAgent:
 
     def _direct_call_questions(self, text: str) -> list[Question]:
         if any(word in text for word in ["dinner", "lunch", "party", "invite", "invitation"]):
+            meal = "dinner" if "dinner" in text else "lunch" if "lunch" in text else "the event"
+            timing = " tonight" if "tonight" in text else ""
             questions = [
-                "I am calling on behalf of the user to invite you for dinner. Would you like to join?",
-                "Are you available at the proposed time, or should the user follow up with another time?",
+                (
+                    f"I am calling on behalf of the user to invite you for {meal}{timing}. "
+                    "Would you like to join?"
+                ),
+                (
+                    "Are you available at the proposed time, or should the user follow up "
+                    "with another time?"
+                ),
                 "Is there anything the user should know before confirming the plan?",
             ]
         else:
             questions = [
-                "I am calling on behalf of the user about their request. What answer should I pass back?",
+                (
+                    "I am calling on behalf of the user about their request. "
+                    "What answer should I pass back?"
+                ),
                 "Is any follow-up needed from the user?",
                 "Is there anything else the user should know?",
             ]
@@ -265,7 +290,10 @@ class RequestParserAgent:
         if "dinner" in text and any(word in text for word in ["invite", "inviting", "invitation"]):
             return "Invite the provided contacts for dinner and track each response."
         if "appointment" in text:
-            return "Call the provided contacts to ask about appointment availability and track responses."
+            return (
+                "Call the provided contacts to ask about appointment availability "
+                "and track responses."
+            )
         return "Call the provided phone numbers, ask the approved questions, and track each answer."
 
     def _extract_phone_numbers(

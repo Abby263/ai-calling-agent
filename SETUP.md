@@ -207,7 +207,7 @@ This app sends Twilio the webhook URLs when it creates each outbound call:
 
 You do not need to create a TwiML App for the current MVP. Twilio trial accounts can usually call only verified recipient numbers, so use a verified personal test number first.
 
-Keep `ALLOW_CALL_RECORDING=false` for initial testing. In that mode the Twilio voice webhook uses speech gathering to capture the callee's spoken answer without enabling call recording. Turn recording on only after call recording consent, retention, and deletion requirements are handled.
+Keep `ALLOW_CALL_RECORDING=false` for initial testing. In that mode the Twilio voice webhook asks the approved questions one at a time with speech gathering, captures each spoken answer, and then summarizes the result without enabling call recording. Turn recording on only after call recording consent, retention, and deletion requirements are handled.
 
 ## 4. Real Test Checklist
 

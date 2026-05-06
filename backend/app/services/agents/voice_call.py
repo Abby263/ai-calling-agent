@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import timezone
+from datetime import UTC
 from uuid import uuid4
 
 from app.core.config import Settings
 from app.db.store import utc_now
 from app.schemas import BusinessCandidate, CallRecord, CallStatus, Question
-from app.services.compliance import build_call_script, build_disclosure_log, local_business_hours_note
+from app.services.compliance import (
+    approved_questions,
+    build_call_script,
+    build_disclosure_log,
+    build_turn_prompt,
+    local_business_hours_note,
+)
 
 
 class VoiceCallAgent:
@@ -57,7 +63,7 @@ class VoiceCallAgent:
         call.call_sid = f"demo_{uuid4().hex[:12]}"
         call.status = CallStatus.COMPLETED
         call.started_at = utc_now()
-        call.ended_at = utc_now().astimezone(timezone.utc)
+        call.ended_at = utc_now().astimezone(UTC)
         call.transcript = self._demo_transcript(call)
         return call
 
@@ -97,23 +103,42 @@ class VoiceCallAgent:
 
     def _demo_direct_call_transcript(self, call: CallRecord) -> str:
         name = call.business_name
-        script = build_call_script(call.questions)
         if name.endswith("1"):
-            answer = (
-                "Yes, I would like to join dinner. Please tell them I am available and looking "
-                "forward to it. No follow-up is needed unless the time changes."
-            )
+            answers = [
+                "Yes, I would like to join dinner.",
+                "I am available tonight and looking forward to it.",
+                "No follow-up is needed unless the time changes.",
+            ]
         elif name.endswith("2"):
-            answer = (
-                "I am not sure yet. Please ask them to text me the time and place so I can confirm."
-            )
+            answers = [
+                "I am not sure yet.",
+                "Please ask them to text me the time and place so I can confirm.",
+                "I can confirm after I have the final details.",
+            ]
         elif name.endswith("3"):
-            answer = (
-                "Thanks for inviting me, but I cannot make dinner this time. No follow-up needed."
-            )
+            answers = [
+                "Thanks for inviting me, but I cannot make dinner this time.",
+                "No follow-up needed.",
+                "Nothing else.",
+            ]
         else:
-            answer = "Yes, that works for me. Please have them send the final details."
-        return f"AI: {script}\n{name}: {answer}"
+            answers = [
+                "Yes, that works for me.",
+                "Please have them send the final details.",
+                "Nothing else.",
+            ]
+        return self._demo_turn_transcript(call, answers)
+
+    def _demo_turn_transcript(self, call: CallRecord, answers: list[str]) -> str:
+        questions = approved_questions(call.questions)
+        if not questions:
+            return f"AI: {build_call_script(call.questions)}\n{call.business_name}: {answers[0]}"
+        lines: list[str] = []
+        for index, _question in enumerate(questions):
+            lines.append(f"AI: {build_turn_prompt(call.questions, index)}")
+            if index < len(answers):
+                lines.append(f"{call.business_name}: {answers[index]}")
+        return "\n".join(lines)
 
     def _demo_clinic_transcript(self, call: CallRecord) -> str:
         name = call.business_name
@@ -129,7 +154,8 @@ class VoiceCallAgent:
         elif "downtown" in lower:
             answer = (
                 "We are Appletree downtown, but not the Harbour Street branch. The earliest doctor "
-                "appointment here is Friday morning. The user should book online and bring health card details."
+                "appointment here is Friday morning. The user should book online and bring "
+                "health card details."
             )
         elif "family practice" in lower:
             answer = (

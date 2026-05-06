@@ -1,5 +1,6 @@
 import {
   Check,
+  CheckCircle2,
   ClipboardList,
   ExternalLink,
   Phone,
@@ -42,6 +43,12 @@ export function BusinessPreview({
   const targetLabel = isDirectCallTask ? "contact" : "business";
   const targetLabelPlural = isDirectCallTask ? "contacts" : "businesses";
   const approvedQuestions = questions.filter((question) => question.text.trim()).length;
+  const approveDisabled =
+    loading || selectedIds.length === 0 || questions.every((question) => !question.text.trim());
+  const approveLabel =
+    selectedIds.length === 1
+      ? `Approve 1 ${targetLabel} and start call`
+      : `Approve ${selectedIds.length} ${targetLabelPlural} and start calls`;
 
   function toggleBusiness(id: string) {
     if (selectedSet.has(id)) {
@@ -80,29 +87,80 @@ export function BusinessPreview({
               Approve {targetLabelPlural} and questions
             </h1>
             <p className="mt-1.5 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              Review the queue, refine the script, then approve. The agent will only call selected targets.
+              Select targets, review the questions, then press the approval button. The agent will
+              only call selected targets.
             </p>
           </div>
-          <div className="grid w-full grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark sm:w-auto sm:min-w-[22rem]">
-            {[
-              ["Selected", selectedIds.length],
-              ["Limit", maxCalls],
-              ["Questions", approvedQuestions]
-            ].map(([label, value], index, arr) => (
-              <div
-                key={label}
-                className={`px-4 py-3 ${index < arr.length - 1 ? "border-r border-slate-200/70 dark:border-slate-700/70" : ""}`}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
-                  {label}
-                </p>
-                <p className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
-                  {value}
-                </p>
-              </div>
-            ))}
+          <div className="grid w-full gap-3 sm:w-auto sm:min-w-[24rem]">
+            <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark">
+              {[
+                ["Selected", selectedIds.length],
+                ["Limit", maxCalls],
+                ["Questions", approvedQuestions]
+              ].map(([label, value], index, arr) => (
+                <div
+                  key={label}
+                  className={`px-4 py-3 ${index < arr.length - 1 ? "border-r border-slate-200/70 dark:border-slate-700/70" : ""}`}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
+                    {label}
+                  </p>
+                  <p className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              onClick={onApprove}
+              disabled={approveDisabled}
+              className="w-full justify-center px-5"
+            >
+              {loading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  Starting approved calls
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  {approveLabel}
+                </>
+              )}
+            </Button>
           </div>
         </div>
+      </div>
+
+      <div className="surface sticky top-[5.25rem] z-20 flex flex-wrap items-center justify-between gap-3 p-3 shadow-lifted">
+        <div>
+          <p className="text-sm font-semibold text-slate-950 dark:text-white">
+            Ready to approve?
+          </p>
+          <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
+            {selectedIds.length} selected, {approvedQuestions} question
+            {approvedQuestions === 1 ? "" : "s"} prepared. Calls begin only after this approval.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={onApprove}
+          disabled={approveDisabled}
+          className="min-w-[14rem] px-5"
+        >
+          {loading ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              Starting calls
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={16} />
+              Approve and start
+            </>
+          )}
+        </Button>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -135,7 +193,7 @@ export function BusinessPreview({
                   key={business.id}
                   type="button"
                   onClick={() => toggleBusiness(business.id)}
-                  className={`grid w-full gap-3 px-5 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
+                  className={`group grid w-full gap-3 px-5 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
                     selected
                       ? "bg-brand-50/70 hover:bg-brand-50 dark:bg-brand-500/15 dark:hover:bg-brand-500/20"
                       : "hover:bg-slate-50 dark:hover:bg-slate-800/70"
@@ -191,8 +249,8 @@ export function BusinessPreview({
                       : `${business.rating ?? "—"} · ${priceLabel(business.price_level)}`}
                   </span>
                   <span>
-                    <Badge className={statusClass(business.open_now ? "completed" : "unknown")}>
-                      {business.open_now ? "Open" : "Check"}
+                    <Badge className={statusClass(selected ? "completed" : "unknown")}>
+                      {selected ? "Selected" : "Tap to select"}
                     </Badge>
                   </span>
                 </button>
@@ -269,12 +327,7 @@ export function BusinessPreview({
             <Button type="button" variant="secondary" onClick={onBack}>
               Back
             </Button>
-            <Button
-              type="button"
-              onClick={onApprove}
-              disabled={loading || selectedIds.length === 0 || questions.every((question) => !question.text.trim())}
-              className="flex-1 px-5"
-            >
+            <Button type="button" onClick={onApprove} disabled={approveDisabled} className="flex-1 px-5">
               {loading ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
@@ -282,8 +335,8 @@ export function BusinessPreview({
                 </>
               ) : (
                 <>
-                  <Phone size={15} />
-                  Call {selectedIds.length} {selectedIds.length === 1 ? targetLabel : targetLabelPlural}
+                  <CheckCircle2 size={15} />
+                  Approve and start
                 </>
               )}
             </Button>
