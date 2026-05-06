@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 
 from app.db.store import utc_now
 from app.schemas import (
     ApproveCallsRequest,
+    CallExtraction,
     CallStatus,
     TaskDetail,
     TaskListItem,
@@ -22,6 +24,15 @@ from app.services.compliance import (
 )
 
 router = APIRouter(prefix="/api")
+
+
+class LiveKitCallUpdate(BaseModel):
+    status: CallStatus = CallStatus.COMPLETED
+    transcript: str | None = None
+    recording_url: str | None = None
+    extraction_json: CallExtraction | None = None
+    notes: str | None = None
+    ended: bool = Field(default=True)
 
 
 def orchestrator(request: Request):
@@ -48,8 +59,14 @@ async def auth_session(request: Request) -> dict[str, object]:
 @router.post("/tasks/preview", response_model=TaskDetail)
 async def preview_task(payload: TaskPreviewRequest, request: Request) -> TaskDetail:
     user = task_user(request)
+    _enforce_request_quota(request, user)
     try:
-        return await orchestrator(request).preview(payload, user_id=user.user_id if user else None)
+        detail = await orchestrator(request).preview(
+            payload,
+            user_id=user.user_id if user else None,
+        )
+        _consume_request_quota(request, user)
+        return detail
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -107,6 +124,13 @@ async def delete_task(task_id: str, request: Request) -> Response:
     deleted = store(request).delete_task(task_id, user_id=user.user_id if user else None)
     if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
+    return Response(status_code=204)
+
+
+@router.delete("/tasks", status_code=204)
+async def delete_tasks(request: Request) -> Response:
+    user = task_user(request)
+    store(request).delete_tasks(user_id=user.user_id if user else None)
     return Response(status_code=204)
 
 
@@ -243,6 +267,50 @@ async def twilio_transcript(
     return {"ok": "true"}
 
 
+@router.post("/webhooks/livekit/calls/{call_id}")
+async def livekit_call_update(
+    call_id: str,
+    payload: LiveKitCallUpdate,
+    request: Request,
+) -> dict[str, str]:
+    _verify_livekit_webhook(request)
+    found = store(request).find_call(call_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Call not found")
+    detail, call = found
+    call.status = payload.status
+    call.transcript = payload.transcript or call.transcript
+    call.recording_url = payload.recording_url or call.recording_url
+    call.extraction_json = payload.extraction_json or call.extraction_json
+    if payload.notes:
+        note = f"LiveKit worker: {payload.notes}"
+        call.transcript = f"{call.transcript}\n{note}".strip() if call.transcript else note
+    if payload.ended or payload.status in {
+        CallStatus.COMPLETED,
+        CallStatus.FAILED,
+        CallStatus.NO_ANSWER,
+        CallStatus.VOICEMAIL,
+    }:
+        call.ended_at = call.ended_at or utc_now()
+    if call.status in {
+        CallStatus.COMPLETED,
+        CallStatus.FAILED,
+        CallStatus.NO_ANSWER,
+        CallStatus.VOICEMAIL,
+    } and call.extraction_json is None:
+        extractor = TranscriptExtractionAgent(request.app.state.settings)
+        call.extraction_json = await extractor.extract(call)
+    updated = store(request).update_call(detail.task.id, call)
+    if updated and call.status in {
+        CallStatus.COMPLETED,
+        CallStatus.FAILED,
+        CallStatus.NO_ANSWER,
+        CallStatus.VOICEMAIL,
+    }:
+        await orchestrator(request).finalize_if_ready(updated.task.id)
+    return {"ok": "true"}
+
+
 CallStatusEnum = CallStatus
 
 
@@ -302,4 +370,44 @@ def _xml_escape(value: str) -> str:
         .replace(">", "&gt;")
         .replace('"', "&quot;")
         .replace("'", "&apos;")
+    )
+
+
+def _verify_livekit_webhook(request: Request) -> None:
+    expected_secret = request.app.state.settings.livekit_webhook_secret
+    if not expected_secret:
+        return
+    supplied_secret = request.headers.get("x-livekit-webhook-secret")
+    if supplied_secret != expected_secret:
+        raise HTTPException(status_code=401, detail="Invalid LiveKit webhook secret.")
+
+
+def _enforce_request_quota(request: Request, user: AuthenticatedUser | None) -> None:
+    if not user or _has_unlimited_requests(request, user):
+        return
+    free_limit = request.app.state.settings.free_request_limit
+    used = store(request).get_request_count(user.user_id)
+    if used >= free_limit:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                f"The free plan includes {free_limit} concierge request"
+                f"{'' if free_limit == 1 else 's'}. Upgrade to run more tasks."
+            ),
+        )
+
+
+def _consume_request_quota(request: Request, user: AuthenticatedUser | None) -> None:
+    if not user or _has_unlimited_requests(request, user):
+        return
+    store(request).increment_request_count(user.user_id)
+
+
+def _has_unlimited_requests(request: Request, user: AuthenticatedUser) -> bool:
+    settings = request.app.state.settings
+    email = user.email.lower() if user.email else None
+    return (
+        user.subject in settings.admin_clerk_subjects
+        or (email is not None and email in settings.admin_emails)
+        or (email is not None and email in settings.paid_user_emails)
     )

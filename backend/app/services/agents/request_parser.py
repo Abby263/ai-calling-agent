@@ -14,7 +14,13 @@ Return only valid JSON. The app supports:
 2. nearby_search: user asks to find nearby businesses before calling.
 Extract task_kind, direct_phone_numbers, call_objective, constraints, call questions,
 summary criteria, and whether calls are required. Never invent private user details.
-For direct_calls, ask only the minimum questions needed to complete the user's stated request."""
+For direct_calls, ask only the minimum questions needed to complete the user's stated request.
+For confusing requests, set constraints.needs_clarification=true and include
+constraints.clarifying_questions with the missing information. Do not invent missing phone
+numbers, locations, dates, appointment details, or medical/personal details.
+For appointment or clinic requests, ask about availability and booking requirements only; do not
+ask for symptoms, diagnosis, insurance, health card numbers, or private medical details.
+Always return at least one required question when calls_required=true."""
 
 
 class RequestParserAgent:
@@ -61,6 +67,25 @@ class RequestParserAgent:
             ]
             if data["direct_phone_numbers"]:
                 data["task_kind"] = "direct_calls"
+            elif self._looks_like_direct_call_request(payload.original_request):
+                data["task_kind"] = "direct_calls"
+                data["business_type"] = "contact"
+                data["search_target"] = "user-provided phone numbers"
+                data.setdefault("constraints", {})
+                data["constraints"]["needs_clarification"] = True
+                data["constraints"]["clarifying_questions"] = [
+                    "Add the phone number or contact list the agent should call."
+                ]
+                data["calls_required"] = True
+                data["online_search_enough"] = False
+            if data.get("calls_required", True) and not any(
+                question.text.strip() for question in data["required_questions"]
+            ):
+                data["required_questions"] = self._questions_for_request(
+                    payload.original_request,
+                    payload.filters,
+                    task_kind=str(data.get("task_kind") or ""),
+                )
             return ParsedIntent(**data)
         except Exception:
             return None
@@ -70,6 +95,35 @@ class RequestParserAgent:
         phone_numbers = self._extract_phone_numbers(request_text)
         if phone_numbers:
             return self._fallback_direct_call_parse(request_text, filters, phone_numbers)
+        if self._looks_like_direct_call_request(request_text):
+            return ParsedIntent(
+                task_kind="direct_calls",
+                business_type="contact",
+                search_target="user-provided phone numbers",
+                call_objective=self._direct_call_objective(text),
+                direct_phone_numbers=[],
+                radius_meters=filters.radius_meters,
+                required_questions=self._direct_call_questions(text),
+                constraints={
+                    "needs_clarification": True,
+                    "clarifying_questions": [
+                        "Add the phone number or contact list the agent should call."
+                    ],
+                    "max_calls": filters.max_calls,
+                    "preferred_call_time": filters.preferred_call_time,
+                    "provided_phone_number_count": 0,
+                },
+                calls_required=True,
+                online_search_enough=False,
+                summary_criteria=[
+                    "Who accepted",
+                    "Who declined",
+                    "Who is unsure",
+                    "Who did not answer",
+                    "Follow-up needed",
+                ],
+                output_format="call_outcome_tracker",
+            )
 
         business_type = "restaurant"
         search_target = "nearby restaurants and bars"
@@ -224,6 +278,39 @@ class RequestParserAgent:
                 "Do guests need a reservation or appointment?",
             ]
         return [Question(id=f"q_{uuid4().hex[:8]}", text=question) for question in questions]
+
+    def _questions_for_request(
+        self,
+        request_text: str,
+        filters: SearchFilters,
+        *,
+        task_kind: str,
+    ) -> list[Question]:
+        text = request_text.lower()
+        if task_kind == "direct_calls" or self._looks_like_direct_call_request(request_text):
+            return self._direct_call_questions(text)
+        dietary = filters.dietary_preference
+        for option in ["vegan", "vegetarian", "gluten-free", "halal", "kosher"]:
+            if option in text:
+                dietary = option
+                break
+        return self._default_questions(text, dietary)
+
+    def _looks_like_direct_call_request(self, request_text: str) -> bool:
+        text = request_text.lower()
+        direct_call_phrases = [
+            "call the below",
+            "call below",
+            "call these",
+            "call them",
+            "call the following",
+            "invite them",
+            "track response",
+            "track responses",
+            "who says yes",
+            "who said yes",
+        ]
+        return any(phrase in text for phrase in direct_call_phrases)
 
     def _appointment_questions(self, text: str) -> list[Question]:
         clinic_hint = " at Apple Tree near Harbour Street" if "apple tree" in text else ""

@@ -12,7 +12,8 @@ Returns provider enablement flags, demo-mode status, and auth status.
 
 `GET /api/auth/session`
 
-Returns whether auth is required/configured and the current signed-in Clerk user if a valid Clerk session token is attached.
+Returns whether auth is required/configured, current signed-in Clerk user, and usage quota if a
+valid Clerk session token is attached.
 
 When `AUTH_REQUIRED=true`, task APIs require a signed-in Clerk session token in
 `Authorization: Bearer <token>`. The landing page and console route still render publicly.
@@ -22,6 +23,9 @@ When `AUTH_REQUIRED=true`, task APIs require a signed-in Clerk session token in
 `POST /api/tasks/preview`
 
 Creates a task preview. It parses the request, searches/ranks businesses, and returns editable questions. No calls are placed.
+
+When auth is required, this endpoint consumes one request from the free quota after a successful
+preview unless the user is on the admin or paid allowlist.
 
 ```json
 {
@@ -43,6 +47,10 @@ Creates a task preview. It parses the request, searches/ranks businesses, and re
 `GET /api/tasks`
 
 Returns saved task summaries for the dashboard history.
+
+`DELETE /api/tasks`
+
+Deletes all task history for the signed-in user.
 
 `GET /api/tasks/{task_id}`
 
@@ -89,10 +97,28 @@ Consumes Twilio call status callbacks and updates call state.
 
 Consumes transcription data, runs extraction, and triggers summary generation when all calls are complete.
 
+## LiveKit Webhooks
+
+`POST /api/webhooks/livekit/calls/{call_id}`
+
+Consumes final LiveKit worker status and transcript payloads. If `LIVEKIT_WEBHOOK_SECRET` is set,
+the request must include the same value in `x-livekit-webhook-secret`.
+
+```json
+{
+  "status": "completed",
+  "transcript": "assistant: ...\nuser: ...",
+  "recording_url": null,
+  "notes": null,
+  "ended": true
+}
+```
+
 ## Error Handling
 
 - `400`: invalid request, blocked category, or no eligible businesses to call.
 - `401`: login is required for task APIs when auth is enabled.
+- `402`: free request quota exceeded.
 - `404`: task or call not found.
 - `409`: task is already completed or cancelled.
 - `503`: auth is required but Clerk env vars are not configured.

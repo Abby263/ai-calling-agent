@@ -36,21 +36,39 @@ import { Badge, Button } from "./ui";
 
 type LandingPageProps = {
   onOpenApp: () => void;
+  onOpenPricing: () => void;
   authClient: AppAuthClient;
   darkMode: boolean;
   onToggleTheme: () => void;
+  githubUrl: string;
 };
 
-export function LandingPage({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingPageProps) {
+export function LandingPage({
+  onOpenApp,
+  onOpenPricing,
+  authClient,
+  darkMode,
+  onToggleTheme,
+  githubUrl
+}: LandingPageProps) {
   return (
     <main className="min-h-screen text-ink dark:text-slate-100">
       <SiteHeader
         onOpenApp={onOpenApp}
+        onOpenPricing={onOpenPricing}
         authClient={authClient}
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
+        githubUrl={githubUrl}
       />
-      <Hero onOpenApp={onOpenApp} authClient={authClient} darkMode={darkMode} onToggleTheme={onToggleTheme} />
+      <Hero
+        onOpenApp={onOpenApp}
+        onOpenPricing={onOpenPricing}
+        authClient={authClient}
+        darkMode={darkMode}
+        onToggleTheme={onToggleTheme}
+        githubUrl={githubUrl}
+      />
       <SocialProofStrip />
       <ProductPreview onOpenApp={onOpenApp} />
       <FeatureGrid />
@@ -58,18 +76,26 @@ export function LandingPage({ onOpenApp, authClient, darkMode, onToggleTheme }: 
       <HowItWorks />
       <Trust />
       <Faq />
-      <ClosingCta onOpenApp={onOpenApp} authClient={authClient} darkMode={darkMode} onToggleTheme={onToggleTheme} />
+      <ClosingCta
+        onOpenApp={onOpenApp}
+        onOpenPricing={onOpenPricing}
+        authClient={authClient}
+        darkMode={darkMode}
+        onToggleTheme={onToggleTheme}
+        githubUrl={githubUrl}
+      />
       <SiteFooter />
     </main>
   );
 }
 
-function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingPageProps) {
+function SiteHeader({ onOpenApp, onOpenPricing, authClient, darkMode, onToggleTheme, githubUrl }: LandingPageProps) {
   const [open, setOpen] = useState(false);
   const links = [
     { label: "Features", href: "#features" },
     { label: "How it works", href: "#how-it-works" },
     { label: "Use cases", href: "#use-cases" },
+    { label: "Pricing", href: "/pricing" },
     { label: "FAQ", href: "#faq" }
   ];
   return (
@@ -94,6 +120,12 @@ function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingP
             <a
               key={link.href}
               href={link.href}
+              onClick={(event) => {
+                if (link.href === "/pricing") {
+                  event.preventDefault();
+                  onOpenPricing();
+                }
+              }}
               className="rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
             >
               {link.label}
@@ -102,6 +134,15 @@ function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingP
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 xl:inline-flex"
+          >
+            <Github size={16} />
+            GitHub
+          </a>
           <button
             type="button"
             aria-label={darkMode ? "Use light mode" : "Use dark mode"}
@@ -157,7 +198,13 @@ function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingP
               <a
                 key={link.href}
                 href={link.href}
-                onClick={() => setOpen(false)}
+                onClick={(event) => {
+                  if (link.href === "/pricing") {
+                    event.preventDefault();
+                    onOpenPricing();
+                  }
+                  setOpen(false);
+                }}
                 className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200"
               >
                 {link.label}
@@ -186,6 +233,15 @@ function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingP
                 <ArrowRight size={14} />
               </Button>
             </div>
+            <a
+              href={githubUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <Github size={15} />
+              GitHub repo
+            </a>
             <button
               type="button"
               onClick={onToggleTheme}
@@ -201,7 +257,7 @@ function SiteHeader({ onOpenApp, authClient, darkMode, onToggleTheme }: LandingP
   );
 }
 
-function Hero({ onOpenApp, authClient }: LandingPageProps) {
+function Hero({ onOpenApp, onOpenPricing, authClient }: LandingPageProps) {
   return (
     <section className="relative isolate overflow-hidden border-b border-slate-200/70 dark:border-slate-800/80">
       <div
@@ -241,6 +297,14 @@ function Hero({ onOpenApp, authClient }: LandingPageProps) {
               <Workflow size={16} />
               See how it works
             </a>
+            <button
+              type="button"
+              onClick={onOpenPricing}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:border-slate-600"
+            >
+              Pricing
+              <ArrowRight size={16} />
+            </button>
             {authClient.frontendConfigured && !authClient.isSignedIn ? (
               <button
                 type="button"
@@ -874,7 +938,11 @@ const FAQS = [
   },
   {
     q: "Is there a free tier?",
-    a: "The dashboard is free to try. Telephony usage charges depend on the provider you connect; the project ships with a Twilio integration."
+    a: "Yes. A signed-in user gets one concierge request for evaluation. More requests require a paid plan because live calls can spend money on carrier minutes, realtime voice, search, and LLM extraction."
+  },
+  {
+    q: "Why use LiveKit for production voice?",
+    a: "LiveKit Agents gives the product a realtime room model, SIP telephony bridge, explicit agent dispatch, and observability. Twilio webhooks remain a useful fallback, but LiveKit is the better path for natural multi-turn speech-to-speech calls."
   },
   {
     q: "Where is my data stored?",
@@ -935,7 +1003,7 @@ function Faq() {
   );
 }
 
-function ClosingCta({ onOpenApp, authClient }: LandingPageProps) {
+function ClosingCta({ onOpenApp, onOpenPricing, authClient }: LandingPageProps) {
   return (
     <section className="border-b border-slate-200/70 dark:border-slate-800/80">
       <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -968,6 +1036,14 @@ function ClosingCta({ onOpenApp, authClient }: LandingPageProps) {
                 Try it free
                 <ArrowRight size={16} />
               </Button>
+              <button
+                type="button"
+                onClick={onOpenPricing}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                View pricing
+                <ArrowRight size={15} />
+              </button>
               {authClient.frontendConfigured && !authClient.isSignedIn ? (
                 <button
                   type="button"
@@ -1012,6 +1088,7 @@ function SiteFooter() {
             { label: "Features", href: "#features" },
             { label: "How it works", href: "#how-it-works" },
             { label: "Use cases", href: "#use-cases" },
+            { label: "Pricing", href: "/pricing" },
             { label: "FAQ", href: "#faq" }
           ]}
         />

@@ -17,8 +17,13 @@ flowchart LR
   Rank --> Preview["Human Approval Gate"]
   Preview --> Planner["CallPlannerAgent"]
   Planner --> Voice["VoiceCallAgent"]
-  Voice --> Twilio["Twilio Programmable Voice"]
+  Voice --> Runtime{"Voice runtime"}
+  Runtime --> Twilio["Twilio Programmable Voice"]
+  Runtime --> LiveKit["LiveKit room + SIP participant"]
+  LiveKit --> Worker["LiveKit agent worker"]
+  Worker --> LiveKitWebhook["LiveKit callback webhook"]
   Twilio --> Webhooks["Twilio Webhooks"]
+  LiveKitWebhook --> Extract["TranscriptExtractionAgent"]
   Webhooks --> Extract["TranscriptExtractionAgent"]
   Extract --> Summary["SummaryAgent"]
   Summary --> UI
@@ -45,7 +50,10 @@ Applies the approval list, call cap, and compliance eligibility before calls are
 
 `VoiceCallAgent`
 
-Creates Twilio outbound calls or demo calls. Twilio calls use public webhook URLs and a transparent disclosure script.
+Creates demo calls, Twilio Programmable Voice calls, or LiveKit realtime calls. Twilio calls use
+public webhook URLs and a transparent disclosure script. LiveKit calls dispatch the named agent,
+create a SIP participant through the configured outbound trunk, and wait for the worker to post
+transcripts back to the API.
 
 `TranscriptExtractionAgent`
 
@@ -65,6 +73,9 @@ The included PostgreSQL schema implements:
 - `calls`
 - `summaries`
 - `consent_disclosure_logs`
+
+`users.request_count` tracks the free request quota. Admin and paid allowlists are configured with
+environment variables while billing is still an MVP concern.
 
 The API uses an in-memory store in demo mode and a Neon/PostgreSQL store when `DEMO_MODE=false` and `DATABASE_URL` is present. When `AUTH_REQUIRED=true`, task rows are scoped to the authenticated local user record created from the Clerk user subject.
 

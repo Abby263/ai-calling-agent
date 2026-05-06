@@ -8,30 +8,45 @@ export function HistoryPanel({
   tasks,
   activeId,
   onOpen,
-  onDelete
+  onDelete,
+  onClear
 }: {
   tasks: TaskListItem[];
   activeId?: string;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  onClear: () => void;
 }) {
   const callCount = tasks.reduce((total, task) => total + task.call_count, 0);
 
   return (
     <aside className="surface-strong order-2 grid max-h-[calc(100vh-3rem)] content-start gap-4 overflow-auto p-4 scrollbar-thin lg:order-1 lg:sticky lg:top-6">
       <div className="grid gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300">
-            <History size={16} />
-          </span>
-          <div>
-            <h2 className="font-display text-base font-semibold text-slate-900 dark:text-white">
-              Task history
-            </h2>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              All requests on this device
-            </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300">
+              <History size={16} />
+            </span>
+            <div>
+              <h2 className="font-display text-base font-semibold text-slate-900 dark:text-white">
+                Task history
+              </h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Saved requests and call results
+              </p>
+            </div>
           </div>
+          {tasks.length ? (
+            <Button
+              type="button"
+              variant="danger"
+              className="h-8 min-h-8 px-2 text-xs"
+              onClick={onClear}
+            >
+              <Trash2 size={12} />
+              Clear
+            </Button>
+          ) : null}
         </div>
         <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark">
           <div className="border-r border-slate-200/70 p-3 dark:border-slate-700/70">
@@ -102,12 +117,13 @@ export function HistoryPanel({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-8 w-8 px-0 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"
+                    className="h-8 min-h-8 px-2 text-xs opacity-100 transition"
                     aria-label="Delete task history"
                     title="Delete task history"
                     onClick={() => onDelete(task.id)}
                   >
                     <Trash2 size={13} />
+                    Delete
                   </Button>
                 </div>
               </div>

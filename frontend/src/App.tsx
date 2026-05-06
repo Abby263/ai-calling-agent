@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
+  CreditCard,
+  Github,
   ListChecks,
   LogIn,
   Moon,
@@ -19,6 +21,7 @@ import {
 import { BusinessPreview } from "./components/BusinessPreview";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { LandingPage } from "./components/LandingPage";
+import { PricingPage } from "./components/PricingPage";
 import { ProgressTimeline } from "./components/ProgressTimeline";
 import { RequestComposer } from "./components/RequestComposer";
 import { ResultsView } from "./components/ResultsView";
@@ -45,7 +48,9 @@ const initialFilters: SearchFilters = {
   dietary_preference: null
 };
 
-type RouteName = "landing" | "console";
+const GITHUB_URL = "https://github.com/Abby263/ai-calling-agent";
+
+type RouteName = "landing" | "console" | "pricing";
 
 export type AppAuthClient = {
   frontendConfigured: boolean;
@@ -70,6 +75,7 @@ type ThemeControls = {
 
 type ConsolePageProps = ThemeControls & {
   onGoHome: () => void;
+  onOpenPricing: () => void;
   authClient: AppAuthClient;
 };
 
@@ -78,7 +84,9 @@ type AppProps = {
 };
 
 function routeFromPath(): RouteName {
-  return window.location.pathname.startsWith("/app") ? "console" : "landing";
+  if (window.location.pathname.startsWith("/app")) return "console";
+  if (window.location.pathname.startsWith("/pricing")) return "pricing";
+  return "landing";
 }
 
 export default function App({ authClient }: AppProps) {
@@ -102,7 +110,7 @@ export default function App({ authClient }: AppProps) {
   }, [darkMode]);
 
   const navigate = useCallback((nextRoute: RouteName) => {
-    const nextPath = nextRoute === "console" ? "/app" : "/";
+    const nextPath = nextRoute === "console" ? "/app" : nextRoute === "pricing" ? "/pricing" : "/";
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
@@ -112,11 +120,25 @@ export default function App({ authClient }: AppProps) {
 
   const toggleTheme = useCallback(() => setDarkMode((value) => !value), []);
 
+  if (route === "pricing") {
+    return (
+      <PricingPage
+        darkMode={darkMode}
+        onToggleTheme={toggleTheme}
+        onGoHome={() => navigate("landing")}
+        onOpenApp={() => navigate("console")}
+        authClient={authClient}
+        githubUrl={GITHUB_URL}
+      />
+    );
+  }
+
   return route === "console" ? (
     <ConsolePage
       darkMode={darkMode}
       onToggleTheme={toggleTheme}
       onGoHome={() => navigate("landing")}
+      onOpenPricing={() => navigate("pricing")}
       authClient={authClient}
     />
   ) : (
@@ -124,7 +146,9 @@ export default function App({ authClient }: AppProps) {
       darkMode={darkMode}
       onToggleTheme={toggleTheme}
       onOpenApp={() => navigate("console")}
+      onOpenPricing={() => navigate("pricing")}
       authClient={authClient}
+      githubUrl={GITHUB_URL}
     />
   );
 }
@@ -133,14 +157,18 @@ function DashboardHeader({
   darkMode,
   onToggleTheme,
   onGoHome,
+  onOpenPricing,
   authClient,
   task,
-  onNewTask
+  onNewTask,
+  billing
 }: ThemeControls & {
   onGoHome: () => void;
+  onOpenPricing: () => void;
   authClient: AppAuthClient;
   task: TaskDetail | null;
   onNewTask: () => void;
+  billing?: AuthSession["billing"];
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/85">
@@ -183,10 +211,35 @@ function DashboardHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 md:inline-flex"
+          >
+            <Github size={14} />
+            GitHub
+          </a>
+          <button
+            type="button"
+            onClick={onOpenPricing}
+            className="hidden h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 sm:inline-flex"
+          >
+            <CreditCard size={14} />
+            Pricing
+          </button>
           <Badge className="hidden border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300 lg:inline-flex">
             <ShieldCheck size={12} />
             AI disclosure on
           </Badge>
+          {billing && billing.plan !== "anonymous" ? (
+            <Badge className="hidden border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 lg:inline-flex">
+              <CreditCard size={12} />
+              {billing.unlimited
+                ? `${billing.plan} · unlimited`
+                : `${billing.remaining_requests ?? 0}/${billing.free_request_limit} free left`}
+            </Badge>
+          ) : null}
           {authClient.frontendConfigured && authClient.isSignedIn ? (
             <>
               <Badge className="hidden border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 sm:inline-flex">
@@ -281,7 +334,7 @@ function StagePill({
   );
 }
 
-function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsolePageProps) {
+function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authClient }: ConsolePageProps) {
   const [stage, setStage] = useState<Stage>("request");
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
@@ -393,6 +446,10 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       );
       return;
     }
+    if (err instanceof ApiError && err.status === 402) {
+      setError(`${apiErrorMessage(err)} Open Pricing from the top navigation to choose a paid plan.`);
+      return;
+    }
     setError(err instanceof ApiError ? apiErrorMessage(err) : err instanceof Error ? err.message : fallback);
   }
 
@@ -408,8 +465,9 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       });
       setTask(preview);
       setQuestions(preview.editable_questions);
-      setMaxCalls(filters.max_calls);
-      setSelectedIds(preview.businesses.slice(0, filters.max_calls).map((business) => business.id));
+      const nextMaxCalls = Math.min(filters.max_calls, Math.max(preview.businesses.length, 1));
+      setMaxCalls(nextMaxCalls);
+      setSelectedIds(preview.businesses.slice(0, nextMaxCalls).map((business) => business.id));
       setStage("preview");
       window.scrollTo({ top: 0, behavior: "smooth" });
       refreshHistory();
@@ -509,6 +567,21 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
     }
   }
 
+  async function clearHistory() {
+    if (handleAuthGate()) return;
+    const confirmed = window.confirm("Delete all saved task history for this account?");
+    if (!confirmed) return;
+    try {
+      await api.clearTasks();
+      setTask(null);
+      setStage("request");
+      setHistory([]);
+      setError(null);
+    } catch (err) {
+      handleApiFailure(err, "Could not clear task history.");
+    }
+  }
+
   function startNewTask() {
     setTask(null);
     setStage("request");
@@ -566,9 +639,11 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
         onGoHome={onGoHome}
+        onOpenPricing={onOpenPricing}
         authClient={authClient}
         task={task}
         onNewTask={startNewTask}
+        billing={authSession?.billing}
       />
       <div className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
@@ -678,7 +753,13 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
             </div>
           </div>
 
-          <HistoryPanel tasks={history} activeId={activeId} onOpen={openTask} onDelete={deleteTask} />
+          <HistoryPanel
+            tasks={history}
+            activeId={activeId}
+            onOpen={openTask}
+            onDelete={deleteTask}
+            onClear={clearHistory}
+          />
         </div>
       </div>
     </main>

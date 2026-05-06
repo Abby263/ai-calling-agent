@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   Check,
   CheckCircle2,
   ClipboardList,
@@ -43,12 +44,24 @@ export function BusinessPreview({
   const targetLabel = isDirectCallTask ? "contact" : "business";
   const targetLabelPlural = isDirectCallTask ? "contacts" : "businesses";
   const approvedQuestions = questions.filter((question) => question.text.trim()).length;
-  const approveDisabled =
-    loading || selectedIds.length === 0 || questions.every((question) => !question.text.trim());
+  const callLimit = Math.min(maxCalls, task.businesses.length || maxCalls);
+  const hasQuestions = approvedQuestions > 0;
+  const clarificationQuestions = task.task.parsed_intent_json.constraints.clarifying_questions;
+  const clarificationMessage = Array.isArray(clarificationQuestions)
+    ? clarificationQuestions.filter((item): item is string => typeof item === "string").join(" ")
+    : "";
+  const disabledReason =
+    selectedIds.length === 0
+      ? `Select at least one ${targetLabel} to call.`
+      : !hasQuestions
+        ? "Add at least one approved question before starting calls."
+        : null;
+  const approveDisabled = loading || disabledReason !== null;
   const approveLabel =
     selectedIds.length === 1
       ? `Approve 1 ${targetLabel} and start call`
       : `Approve ${selectedIds.length} ${targetLabelPlural} and start calls`;
+  const recommendedSelection = task.businesses.slice(0, maxCalls).map((business) => business.id);
 
   function toggleBusiness(id: string) {
     if (selectedSet.has(id)) {
@@ -68,6 +81,12 @@ export function BusinessPreview({
 
   function removeQuestion(id: string) {
     setQuestions(questions.filter((question) => question.id !== id));
+  }
+
+  function updateMaxCalls(value: number) {
+    const nextMax = Math.min(5, Math.max(1, value || 1));
+    setMaxCalls(nextMax);
+    setSelectedIds(selectedIds.slice(0, nextMax));
   }
 
   return (
@@ -90,6 +109,12 @@ export function BusinessPreview({
               Select targets, review the questions, then press the approval button. The agent will
               only call selected targets.
             </p>
+            {clarificationMessage ? (
+              <p className="mt-3 inline-flex max-w-xl items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                {clarificationMessage}
+              </p>
+            ) : null}
           </div>
           <div className="grid w-full gap-3 sm:w-auto sm:min-w-[24rem]">
             <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark">
@@ -115,6 +140,7 @@ export function BusinessPreview({
               type="button"
               onClick={onApprove}
               disabled={approveDisabled}
+              title={disabledReason ?? "Approve selected targets and start calls"}
               className="w-full justify-center px-5"
             >
               {loading ? (
@@ -139,14 +165,17 @@ export function BusinessPreview({
             Ready to approve?
           </p>
           <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-            {selectedIds.length} selected, {approvedQuestions} question
-            {approvedQuestions === 1 ? "" : "s"} prepared. Calls begin only after this approval.
+            {disabledReason ??
+              `${selectedIds.length} selected, ${approvedQuestions} question${
+                approvedQuestions === 1 ? "" : "s"
+              } prepared. Calls begin only after this approval.`}
           </p>
         </div>
         <Button
           type="button"
           onClick={onApprove}
           disabled={approveDisabled}
+          title={disabledReason ?? "Approve selected targets and start calls"}
           className="min-w-[14rem] px-5"
         >
           {loading ? (
@@ -177,6 +206,26 @@ export function BusinessPreview({
             <Badge className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
               {selectedIds.length}/{maxCalls} queued
             </Badge>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9 min-h-9 px-3 text-xs"
+                disabled={task.businesses.length === 0}
+                onClick={() => setSelectedIds(recommendedSelection)}
+              >
+                Select top {callLimit}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-9 min-h-9 px-3 text-xs"
+                disabled={selectedIds.length === 0}
+                onClick={() => setSelectedIds([])}
+              >
+                Clear selection
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-slate-200/70 bg-slate-50/70 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300 max-lg:hidden">
             <span />
@@ -186,6 +235,15 @@ export function BusinessPreview({
             <span>Status</span>
           </div>
           <div className="divide-y divide-slate-200/70 dark:divide-slate-700/70">
+            {task.businesses.length === 0 ? (
+              <div className="grid gap-2 px-5 py-8 text-sm text-slate-600 dark:text-slate-300">
+                <p className="font-semibold text-slate-900 dark:text-white">No callable targets found.</p>
+                <p>
+                  Add phone numbers or clarify the request, then go back to intake and build a new
+                  approval queue.
+                </p>
+              </div>
+            ) : null}
             {task.businesses.map((business) => {
               const selected = selectedSet.has(business.id);
               return (
@@ -276,7 +334,7 @@ export function BusinessPreview({
               min={1}
               max={5}
               value={maxCalls}
-              onChange={(event) => setMaxCalls(Math.min(5, Math.max(1, Number(event.target.value))))}
+              onChange={(event) => updateMaxCalls(Number(event.target.value))}
             />
           </Field>
 
@@ -321,13 +379,25 @@ export function BusinessPreview({
                 </Button>
               </div>
             ))}
+            {!hasQuestions ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100">
+                Add at least one concise question. The approval button turns on after a target and
+                question are selected.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="secondary" onClick={onBack}>
               Back
             </Button>
-            <Button type="button" onClick={onApprove} disabled={approveDisabled} className="flex-1 px-5">
+            <Button
+              type="button"
+              onClick={onApprove}
+              disabled={approveDisabled}
+              title={disabledReason ?? "Approve selected targets and start calls"}
+              className="flex-1 px-5"
+            >
               {loading ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />

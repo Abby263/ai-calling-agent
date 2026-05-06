@@ -37,6 +37,7 @@ class ClerkAuthService:
             "auth_configured": self.settings.auth_configured,
             "authenticated": session is not None,
             "user": _public_user(session) if session else None,
+            "billing": _billing_payload(request, self.settings, session),
             "auth_error": auth_error,
         }
 
@@ -141,4 +142,35 @@ def _public_user(user: AuthenticatedUser | None) -> dict[str, str | None] | None
         "email": user.email,
         "name": user.name,
         "picture": user.picture,
+    }
+
+
+def _billing_payload(
+    request: Request,
+    settings: Settings,
+    user: AuthenticatedUser | None,
+) -> dict[str, object]:
+    if not user:
+        return {
+            "plan": "anonymous",
+            "free_request_limit": settings.free_request_limit,
+            "request_count": 0,
+            "remaining_requests": 0,
+            "unlimited": False,
+        }
+
+    email = user.email.lower() if user.email else None
+    admin = user.subject in settings.admin_clerk_subjects or (
+        email is not None and email in settings.admin_emails
+    )
+    paid = email is not None and email in settings.paid_user_emails
+    request_count = request.app.state.store.get_request_count(user.user_id)
+    unlimited = admin or paid
+    remaining = None if unlimited else max(settings.free_request_limit - request_count, 0)
+    return {
+        "plan": "admin" if admin else "paid" if paid else "free",
+        "free_request_limit": settings.free_request_limit,
+        "request_count": request_count,
+        "remaining_requests": remaining,
+        "unlimited": unlimited,
     }
