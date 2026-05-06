@@ -39,29 +39,35 @@ Safety controls:
 
 ## UI Demo
 
-There is no recorded demo video in this repository yet. The deployed app now opens with a product landing page first, then routes users into the production-style dashboard flow shown below.
+The deployed app opens on a product landing page that explains what the agent does, then routes users into a four-stage dashboard: Intake → Approve → Calls → Results.
+
+### Landing Page
+
+A first-time visitor sees the value proposition, a live-style preview of the dashboard, the four-step workflow, trust pillars, FAQ, and a closing call to action.
+
+![Voice Concierge landing page](docs/assets/ui-landing.png)
 
 ### 1. Natural-Language Intake
 
-The user starts with a general request. The dashboard makes it clear that the app can handle direct phone lists, appointment requests, or nearby discovery.
+The user describes the task in plain language — type or voice. Direct phone lists, appointment requests, and nearby discovery are all handled by the same intake.
 
 ![Voice Concierge intake screen](docs/assets/ui-intake.png)
 
 ### 2. Human Approval Queue
 
-The app parses the request, creates call targets, proposes questions, and waits for user approval.
+The app parses the request, builds the call targets, proposes the questions, and waits for explicit approval. Nothing dials out until the user confirms.
 
 ![Voice Concierge approval queue](docs/assets/ui-approval.png)
 
-### 3. Structured Results
+### 3. Decision-Ready Results
 
-After calls complete, the app shows the summary, structured table, call outcomes, transcript evidence, and export options.
+After the calls finish, the dashboard renders the final summary, the structured comparison table, per-call outcomes, transcript evidence, and export options (PDF, JSON, email).
 
 ![Voice Concierge results screen](docs/assets/ui-results.png)
 
 ### 4. Dark Mode
 
-The web dashboard includes a light/dark theme toggle for operator use.
+The web dashboard ships with a light/dark theme toggle that persists across the landing page and console.
 
 ![Voice Concierge dark mode](docs/assets/ui-dark-mode.png)
 
