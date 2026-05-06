@@ -240,7 +240,7 @@ Open:
 | `ALLOW_CALL_RECORDING` | Yes | Optional | Enables recordings when lawful |
 | `AUTH_REQUIRED` | Yes | Yes | Requires login for task APIs; production real mode defaults to true |
 | `CLERK_SECRET_KEY` | No | Yes when auth is required | Server-side Clerk token verification |
-| `VITE_CLERK_PUBLISHABLE_KEY` | No | Yes when auth is required | Clerk React sign-in/sign-up |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY` | No | Yes when auth is required | Clerk React sign-in/sign-up |
 | `CLERK_AUTHORIZED_PARTIES` | No | Recommended | Allowed frontend origins for Clerk session tokens |
 | `OPENAI_API_KEY` | No | Yes | LLM planning, extraction, summary |
 | `OPENAI_MODEL` | Yes | Yes | LLM model name |

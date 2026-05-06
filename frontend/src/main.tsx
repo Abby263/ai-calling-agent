@@ -7,7 +7,9 @@ import type { AppAuthClient } from "./App";
 import { setAuthTokenProvider } from "./lib/api";
 import "./styles/index.css";
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkPublishableKey =
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ??
+  import.meta.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 const signedOutAuthClient: AppAuthClient = {
   frontendConfigured: false,

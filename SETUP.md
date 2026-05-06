@@ -21,7 +21,7 @@ Required:
 | OpenAI | Parses requests, extracts call answers, and writes summaries | `OPENAI_API_KEY`, `OPENAI_MODEL` |
 | Google Places | Finds nearby businesses for discovery requests | `GOOGLE_PLACES_API_KEY` |
 | Twilio Voice | Places outbound phone calls | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
-| Clerk | Sign-in/sign-up and auth gate for paid task execution | `AUTH_REQUIRED`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` |
+| Clerk | Sign-in/sign-up and auth gate for paid task execution | `AUTH_REQUIRED`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY` |
 
 Optional for this MVP:
 
@@ -49,7 +49,7 @@ DEMO_MODE=false
 ALLOW_CALL_RECORDING=false
 AUTH_REQUIRED=true
 CLERK_SECRET_KEY=sk_live_...
-VITE_CLERK_PUBLISHABLE_KEY=pk_live_...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app
 
 DATABASE_URL=postgresql://...
@@ -76,7 +76,7 @@ npx vercel env add DEMO_MODE production
 npx vercel env add ALLOW_CALL_RECORDING production
 npx vercel env add AUTH_REQUIRED production
 npx vercel env add CLERK_SECRET_KEY production
-npx vercel env add VITE_CLERK_PUBLISHABLE_KEY production
+npx vercel env add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY production
 npx vercel env add CLERK_AUTHORIZED_PARTIES production
 npx vercel env add DATABASE_URL production
 npx vercel env add OPENAI_API_KEY production
@@ -116,13 +116,13 @@ You can also paste the contents of `backend/app/db/schema.sql` into the Neon SQL
 
 The app only uses Neon when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Neon, deployed task history is not reliable.
 
-### Clerk: `CLERK_*` and `VITE_CLERK_PUBLISHABLE_KEY`
+### Clerk: `CLERK_*` and Publishable Key
 
 This MVP uses Clerk for sign-in/sign-up. The landing page and console UI stay public, but creating tasks, approving calls, reading stored task history, reading transcripts, canceling tasks, and deleting tasks require login when `AUTH_REQUIRED=true`.
 
 1. Create a Clerk application.
 2. In Clerk Dashboard, open **Configure -> API keys**.
-3. Copy the publishable key and add it to Vercel as `VITE_CLERK_PUBLISHABLE_KEY`.
+3. Copy the publishable key and add it to Vercel as `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`. The app also supports `VITE_CLERK_PUBLISHABLE_KEY`.
 4. Copy the secret key and add it to Vercel as `CLERK_SECRET_KEY`.
 5. In Clerk Dashboard, confirm these URLs are allowed for the production instance:
 
@@ -329,7 +329,7 @@ Check the Clerk auth env vars in Vercel production:
 
 - `AUTH_REQUIRED=true`
 - `CLERK_SECRET_KEY`
-- `VITE_CLERK_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY`
 - `CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app`
 
 Then redeploy production.
