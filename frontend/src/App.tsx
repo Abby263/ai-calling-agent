@@ -2,22 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
-  Bot,
   Building2,
   CalendarCheck,
   CheckCircle2,
   ClipboardCheck,
-  Database,
-  Globe2,
   ListChecks,
-  LockKeyhole,
   LogIn,
   MapPin,
   Mic2,
   Moon,
   PhoneCall,
   Plus,
-  Server,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -296,19 +291,26 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: Landing
   ];
 
   const flow = [
-    ["1", "Describe the mission", "Speak or type a natural request instead of filling a rigid form."],
-    ["2", "Review the plan", "Approve targets, edit questions, set call limits, and exclude numbers."],
-    ["3", "Calls run transparently", "The voice agent discloses it is AI and calls only approved targets."],
-    ["4", "Compare outcomes", "Review answers, transcripts, confidence, and recommendations."]
-  ];
-
-  const platform = [
-    { label: "Planner", value: "LLM intent extraction", icon: Bot },
-    { label: "Search", value: "Google Places ready", icon: Globe2 },
-    { label: "Calling", value: "Twilio webhooks", icon: PhoneCall },
-    { label: "Storage", value: "Postgres schema", icon: Database },
-    { label: "Workers", value: "LiveKit or Pipecat path", icon: Server },
-    { label: "Safety", value: "Approval and disclosure logs", icon: LockKeyhole }
+    [
+      "1",
+      "Describe the mission",
+      "Example: “Call these numbers, invite them for dinner tonight, and track who says yes.”"
+    ],
+    [
+      "2",
+      "Review the plan",
+      "The app extracts the phone numbers, drafts the dinner invitation question, and asks you to approve the call list."
+    ],
+    [
+      "3",
+      "Calls run transparently",
+      "The AI caller says it is an assistant calling on your behalf, asks the approved question, and records the outcome."
+    ],
+    [
+      "4",
+      "Compare outcomes",
+      "You get a table showing who said yes, who declined, who did not answer, and any notes from the call."
+    ]
   ];
 
   return (
@@ -430,11 +432,12 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: Landing
               How it works
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
-              A controlled workflow for real-world phone work.
+              Example: invite people for dinner and track every answer.
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-600 dark:text-slate-400">
-              The app is designed for broad natural requests: nearby restaurant research, provided call lists,
-              appointment booking, store availability, and policy checks.
+              A user can write a normal request like “Call the below numbers and invite them for dinner.”
+              The dashboard turns that into an approval queue, runs only the approved calls, and summarizes the
+              responses in one place.
             </p>
           </div>
           <div className="grid gap-3">
@@ -452,40 +455,6 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: Landing
                 </div>
               </article>
             ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="architecture" className="py-14">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="max-w-3xl">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
-                Production architecture
-              </p>
-              <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
-                Built for approvals, calls, evidence, and summaries.
-              </h2>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {platform.map((item) => {
-              const Icon = item.icon;
-              return (
-                <article
-                  key={item.label}
-                  className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900/70"
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                    <Icon size={18} />
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-slate-950 dark:text-white">{item.label}</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">{item.value}</p>
-                  </div>
-                </article>
-              );
-            })}
           </div>
         </div>
       </section>
