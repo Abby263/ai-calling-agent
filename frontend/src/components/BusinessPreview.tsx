@@ -83,7 +83,7 @@ export function BusinessPreview({
               Review the queue, refine the script, then approve. The agent will only call selected targets.
             </p>
           </div>
-          <div className="grid w-full grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/70 dark:bg-panel-gradient-dark sm:w-auto sm:min-w-[22rem]">
+          <div className="grid w-full grid-cols-3 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark sm:w-auto sm:min-w-[22rem]">
             {[
               ["Selected", selectedIds.length],
               ["Limit", maxCalls],
@@ -91,9 +91,9 @@ export function BusinessPreview({
             ].map(([label, value], index, arr) => (
               <div
                 key={label}
-                className={`px-4 py-3 ${index < arr.length - 1 ? "border-r border-slate-200/70 dark:border-slate-800/70" : ""}`}
+                className={`px-4 py-3 ${index < arr.length - 1 ? "border-r border-slate-200/70 dark:border-slate-700/70" : ""}`}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   {label}
                 </p>
                 <p className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
@@ -107,7 +107,7 @@ export function BusinessPreview({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="surface-strong overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-5 py-3.5 dark:border-slate-800/70">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-5 py-3.5 dark:border-slate-700/70">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300">
                 <ClipboardList size={16} />
@@ -120,14 +120,14 @@ export function BusinessPreview({
               {selectedIds.length}/{maxCalls} queued
             </Badge>
           </div>
-          <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-800/70 dark:bg-slate-950/40 dark:text-slate-400 max-lg:hidden">
+          <div className="grid grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] gap-3 border-b border-slate-200/70 bg-slate-50/70 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300 max-lg:hidden">
             <span />
             <span>{isDirectCallTask ? "Contact" : "Business"}</span>
             <span>{isDirectCallTask ? "Phone" : "Distance"}</span>
             <span>{isDirectCallTask ? "Source" : "Rating"}</span>
             <span>Status</span>
           </div>
-          <div className="divide-y divide-slate-200/70 dark:divide-slate-800/70">
+          <div className="divide-y divide-slate-200/70 dark:divide-slate-700/70">
             {task.businesses.map((business) => {
               const selected = selectedSet.has(business.id);
               return (
@@ -137,15 +137,15 @@ export function BusinessPreview({
                   onClick={() => toggleBusiness(business.id)}
                   className={`grid w-full gap-3 px-5 py-4 text-left transition lg:grid-cols-[2.5rem_minmax(12rem,1.4fr)_8rem_6rem_6rem] ${
                     selected
-                      ? "bg-brand-50/60 hover:bg-brand-50 dark:bg-brand-950/30 dark:hover:bg-brand-950/40"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                      ? "bg-brand-50/70 hover:bg-brand-50 dark:bg-brand-500/15 dark:hover:bg-brand-500/20"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/70"
                   }`}
                 >
                   <span
                     className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition ${
                       selected
                         ? "border-transparent bg-brand-gradient text-white shadow-soft"
-                        : "border-slate-300 bg-white text-transparent group-hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
+                        : "border-slate-300 bg-white text-transparent group-hover:border-brand-400 dark:border-slate-600 dark:bg-slate-800"
                     }`}
                   >
                     <Check size={15} strokeWidth={3} />
@@ -202,7 +202,7 @@ export function BusinessPreview({
         </div>
 
         <aside className="surface-strong grid content-start gap-4 p-5 xl:sticky xl:top-6">
-          <div className="rounded-xl border border-brand-100 bg-brand-50/70 p-3 dark:border-brand-900/40 dark:bg-brand-950/30">
+          <div className="rounded-xl border border-brand-100 bg-brand-50/70 p-3 dark:border-brand-500/50 dark:bg-brand-500/15">
             <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
               <Sparkles size={11} />
               Detected objective

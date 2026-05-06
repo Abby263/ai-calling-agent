@@ -17,13 +17,13 @@ export function Button({
     primary:
       "border-transparent bg-brand-gradient text-white shadow-[0_8px_24px_-10px_rgba(79,70,229,0.6)] hover:brightness-110 hover:shadow-[0_10px_30px_-8px_rgba(79,70,229,0.65)]",
     secondary:
-      "border-slate-200 bg-white/90 text-slate-800 backdrop-blur hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:border-slate-600 dark:hover:bg-slate-900",
+      "border-slate-300 bg-white text-slate-900 backdrop-blur hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:border-slate-500 dark:hover:bg-slate-700",
     ghost:
-      "border-transparent bg-transparent text-slate-700 hover:bg-slate-100/80 dark:text-slate-300 dark:hover:bg-slate-800/80",
+      "border-transparent bg-transparent text-slate-700 hover:bg-slate-100/80 dark:text-slate-100 dark:hover:bg-slate-800",
     danger:
-      "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-950/60",
+      "border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-100 dark:hover:bg-rose-500/25",
     success:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/60"
+      "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500/70 dark:bg-emerald-500/15 dark:text-emerald-100 dark:hover:bg-emerald-500/25"
   };
   return (
     <button
@@ -36,7 +36,7 @@ export function Button({
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`min-h-10 w-full rounded-lg border border-slate-200 bg-white/95 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-100/70 dark:border-slate-700/70 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-brand-400 dark:focus:bg-slate-950 dark:focus:ring-brand-900/40 ${className}`}
+      className={`min-h-10 w-full rounded-lg border border-slate-200 bg-white/95 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-100/70 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-400 dark:hover:border-slate-500 dark:focus:border-brand-400 dark:focus:bg-slate-900 dark:focus:ring-brand-500/20 ${className}`}
       {...props}
     />
   );
@@ -45,7 +45,7 @@ export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInpu
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`min-h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white/95 bg-[length:18px_18px] bg-[right_0.6rem_center] bg-no-repeat px-3 pr-9 text-sm text-slate-900 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-brand-100/70 dark:border-slate-700/70 dark:bg-slate-950/60 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:border-brand-400 dark:focus:ring-brand-900/40 ${className}`}
+      className={`min-h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white/95 bg-[length:18px_18px] bg-[right_0.6rem_center] bg-no-repeat px-3 pr-9 text-sm text-slate-900 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-brand-100/70 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:hover:border-slate-500 dark:focus:border-brand-400 dark:focus:ring-brand-500/20 ${className}`}
       style={{
         backgroundImage:
           "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'><path d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.24 4.38a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z'/></svg>\")"
@@ -61,7 +61,7 @@ export function Textarea({
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`w-full rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-brand-100/70 dark:border-slate-700/70 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-brand-400 dark:focus:ring-brand-900/40 ${className}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-brand-100/70 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-400 dark:hover:border-slate-500 dark:focus:border-brand-400 dark:focus:ring-brand-500/20 ${className}`}
       {...props}
     />
   );

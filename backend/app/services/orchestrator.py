@@ -20,6 +20,13 @@ from app.services.agents.transcript_extraction import TranscriptExtractionAgent
 from app.services.agents.voice_call import VoiceCallAgent
 from app.services.compliance import ensure_allowed_intent
 
+TERMINAL_CALL_STATUSES = {
+    CallStatus.COMPLETED,
+    CallStatus.FAILED,
+    CallStatus.NO_ANSWER,
+    CallStatus.VOICEMAIL,
+}
+
 
 class TaskOrchestrator:
     def __init__(self, settings: Settings, store: InMemoryTaskStore) -> None:
@@ -101,17 +108,44 @@ class TaskOrchestrator:
         )
         self.store.save_task(detail)
 
-        if all(call.status == CallStatus.COMPLETED and call.extraction_json for call in calls):
-            summary = await self.summary.summarize(detail)
-            detail.summary = summary
-            detail.task.status = TaskStatus.COMPLETED
-            self.store.set_summary(detail.task.id, summary)
-        return self.store.get_task(detail.task.id) or detail
+        if all(call.status in TERMINAL_CALL_STATUSES for call in calls):
+            return await self.finalize_if_ready(detail.task.id, user_id=user_id)
+        return self.store.get_task(detail.task.id, user_id=user_id) or detail
 
     async def regenerate_summary(self, task_id: str, user_id: str | None = None) -> TaskDetail:
         detail = self.store.get_task(task_id, user_id=user_id)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
+        detail = await self._ensure_terminal_extractions(detail, user_id=user_id)
         summary = await self.summary.summarize(detail)
         self.store.set_summary(task_id, summary)
-        return self.store.get_task(task_id) or detail
+        return self.store.get_task(task_id, user_id=user_id) or detail
+
+    async def finalize_if_ready(
+        self,
+        task_id: str,
+        user_id: str | None = None,
+    ) -> TaskDetail:
+        detail = self.store.get_task(task_id, user_id=user_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if not detail.calls or any(
+            call.status not in TERMINAL_CALL_STATUSES for call in detail.calls
+        ):
+            return detail
+        return await self.regenerate_summary(task_id, user_id=user_id)
+
+    async def _ensure_terminal_extractions(
+        self,
+        detail: TaskDetail,
+        user_id: str | None = None,
+    ) -> TaskDetail:
+        changed = False
+        for call in detail.calls:
+            if call.status in TERMINAL_CALL_STATUSES and call.extraction_json is None:
+                call.extraction_json = await self.extractor.extract(call)
+                self.store.update_call(detail.task.id, call)
+                changed = True
+        if changed:
+            return self.store.get_task(detail.task.id, user_id=user_id) or detail
+        return detail
