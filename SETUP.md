@@ -8,7 +8,7 @@ Live app:
 - App console: `https://ai-calling-agent-snowy.vercel.app/app`
 - Health check: `https://ai-calling-agent-snowy.vercel.app/health`
 
-In demo mode the app shows the full UI flow, but it does not call OpenAI, Google Places, or Twilio. For a real Vercel test, set the production env vars below, apply the database schema, and redeploy.
+In demo mode the app shows the full UI flow, but it does not call OpenAI, Google Places, or Twilio. For a real Vercel test, set the production env vars below and redeploy. When `DEMO_MODE=false` and `DATABASE_URL` is configured, the API automatically applies the idempotent Postgres schema on startup.
 
 ## 1. What You Need For A Real Vercel Test
 
@@ -108,7 +108,7 @@ Use Neon for the production database.
 5. Copy the connection string and keep `sslmode=require` if it is included.
 6. Add the full string to Vercel as `DATABASE_URL`.
 
-Apply the schema once from your machine:
+The API applies the idempotent schema automatically on startup. To verify or apply it manually from your machine, run:
 
 ```bash
 psql "$DATABASE_URL" -f backend/app/db/schema.sql
@@ -116,7 +116,7 @@ psql "$DATABASE_URL" -f backend/app/db/schema.sql
 
 You can also paste the contents of `backend/app/db/schema.sql` into the Neon SQL Editor and run it there.
 
-The app only uses Neon when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Neon, deployed task history is not reliable.
+The app only uses Neon when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Neon, deployed task history is not reliable. If you see `relation "users" does not exist` in Vercel logs, the database schema has not been applied to the Neon database connected by `DATABASE_URL`; redeploy the latest version or run the schema command above.
 
 ### Clerk: `CLERK_*` and Publishable Key
 
@@ -214,7 +214,7 @@ Keep `ALLOW_CALL_RECORDING=false` for initial testing. Turn it on only after cal
 Use this checklist before sharing the app with users.
 
 1. Add all required Vercel env vars from section 2.
-2. Apply the database schema.
+2. Confirm the latest deployment started cleanly, or apply the database schema manually if Vercel logs show missing tables.
 3. Confirm Clerk has the production origin configured.
 4. Redeploy production.
 5. Open `https://ai-calling-agent-snowy.vercel.app/health`.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 from psycopg.rows import dict_row
@@ -20,6 +21,8 @@ from app.schemas import (
     TaskStatus,
 )
 
+SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
+
 
 class PostgresTaskStore:
     """PostgreSQL implementation of the task store contract.
@@ -27,11 +30,18 @@ class PostgresTaskStore:
     The API uses this store when `DEMO_MODE=false` and `DATABASE_URL` is configured.
     """
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, *, initialize_schema: bool = True) -> None:
         self.pool = ConnectionPool(
             database_url,
             kwargs={"row_factory": dict_row, "prepare_threshold": None},
         )
+        if initialize_schema:
+            self.initialize_schema()
+
+    def initialize_schema(self) -> None:
+        schema_sql = SCHEMA_SQL_PATH.read_text(encoding="utf-8")
+        with self.pool.connection() as conn:
+            conn.execute(schema_sql)
 
     def create_preview(
         self,
