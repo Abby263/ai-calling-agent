@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     app_name: str = "Voice Concierge Agent"
     app_env: str = Field(default="development", alias="APP_ENV")
     public_base_url: str = Field(default="http://localhost:8000", alias="PUBLIC_BASE_URL")
-    backend_cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    backend_cors_origins_raw: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173",
         alias="BACKEND_CORS_ORIGINS",
     )
 
@@ -42,12 +42,13 @@ class Settings(BaseSettings):
     vercel_oauth_client_id: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_ID")
     vercel_oauth_client_secret: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_SECRET")
 
-    @field_validator("backend_cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def backend_cors_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.backend_cors_origins_raw.split(",")
+            if origin.strip()
+        ]
 
     @property
     def twilio_enabled(self) -> bool:
