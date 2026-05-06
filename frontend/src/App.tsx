@@ -503,7 +503,10 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
   }, []);
 
   const refreshHistory = useCallback(async () => {
-    if (authSession?.auth_required && !authClient.isSignedIn) {
+    if (
+      authSession?.auth_required &&
+      (!authClient.isSignedIn || !authSession.authenticated)
+    ) {
       setHistory([]);
       return;
     }
@@ -553,15 +556,21 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       authClient.signIn();
       return true;
     }
+    if (!authSession.authenticated) {
+      setError(authSessionErrorMessage(authSession));
+      return true;
+    }
     return false;
   }
 
   function handleApiFailure(err: unknown, fallback: string) {
     if (err instanceof ApiError && err.status === 401) {
-      authClient.signIn();
+      setError(
+        `${apiErrorMessage(err)} If you are already signed in, refresh the page or sign out and sign in again.`
+      );
       return;
     }
-    setError(err instanceof Error ? err.message : fallback);
+    setError(err instanceof ApiError ? apiErrorMessage(err) : err instanceof Error ? err.message : fallback);
   }
 
   async function handlePreview() {
@@ -894,4 +903,37 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       </div>
     </main>
   );
+}
+
+function authSessionErrorMessage(session: AuthSession): string {
+  const detail = session.auth_error?.trim();
+  if (detail === "Invalid Clerk authorized party.") {
+    return "Your Clerk session was rejected by the API because the Clerk authorized origin does not match this deployment.";
+  }
+  if (detail === "Invalid Clerk session token.") {
+    return "Your Clerk session token could not be verified by the API.";
+  }
+  return detail
+    ? `Your Clerk session was rejected by the API: ${detail}`
+    : "Your Clerk sign-in was not accepted by the API. Refresh the page or sign out and sign in again.";
+}
+
+function apiErrorMessage(error: ApiError): string {
+  try {
+    const parsed = JSON.parse(error.message) as { detail?: unknown };
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      return parsed.detail;
+    }
+    if (
+      parsed.detail &&
+      typeof parsed.detail === "object" &&
+      "message" in parsed.detail &&
+      typeof parsed.detail.message === "string"
+    ) {
+      return parsed.detail.message;
+    }
+  } catch {
+    // Fall through to the plain response body.
+  }
+  return error.message;
 }

@@ -229,5 +229,6 @@ export interface AuthSession {
   auth_required: boolean;
   auth_configured: boolean;
   authenticated: boolean;
+  auth_error?: string | null;
   user?: AuthUser | null;
 }

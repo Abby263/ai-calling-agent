@@ -26,14 +26,10 @@ function ClerkBackedApp() {
   const { user } = useUser();
   const clerk = useClerk();
 
-  React.useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setAuthTokenProvider(null);
-      return;
-    }
+  React.useLayoutEffect(() => {
     setAuthTokenProvider(() => getToken());
     return () => setAuthTokenProvider(null);
-  }, [getToken, isLoaded, isSignedIn]);
+  }, [getToken]);
 
   const authClient: AppAuthClient = {
     frontendConfigured: true,
