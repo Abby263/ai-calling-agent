@@ -12,7 +12,7 @@ In demo mode the app shows the full UI flow, but it does not call OpenAI, Google
 
 ## 1. What You Need For A Real Vercel Test
 
-Required:
+Required for both runtime modes:
 
 | Service | Why it is needed | Value you will add to Vercel |
 | --- | --- | --- |
@@ -20,15 +20,23 @@ Required:
 | Neon Postgres | Stores users, tasks, businesses, calls, transcripts, and summaries | `DATABASE_URL` |
 | OpenAI | Parses requests, extracts call answers, and writes summaries | `OPENAI_API_KEY`, `OPENAI_MODEL` |
 | Google Places | Finds nearby businesses for discovery requests | `GOOGLE_PLACES_API_KEY` |
-| Twilio Voice | Places outbound phone calls | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
 | Clerk | Sign-in/sign-up and auth gate for paid task execution | `AUTH_REQUIRED`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY` |
 
-Optional for this MVP:
+Choose one call runtime:
+
+| Runtime | Use this when | Required Vercel values | Needs local machine? | Needs separate worker? |
+| --- | --- | --- | --- | --- |
+| `VOICE_RUNTIME=twilio` | You want production calls working now with Twilio's scripted voice flow | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | No | No |
+| `VOICE_RUNTIME=livekit` | You want realtime speech-to-speech AI calls | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`, `LIVEKIT_AGENT_NAME`, `LIVEKIT_WEBHOOK_SECRET`, `TWILIO_FROM_NUMBER` | No, if the worker is deployed in cloud | Yes |
+
+For the current production app, use `VOICE_RUNTIME=twilio` until the LiveKit worker is deployed to a cloud runtime. Twilio mode does not use your local system and does not require LiveKit.
+
+Optional services:
 
 | Service | When to add it | Value |
 | --- | --- | --- |
 | Redis | Add when you move calls to a durable queue or external worker | `REDIS_URL` |
-| LiveKit Cloud | Add when you replace scripted Twilio calls with realtime voice agents | `VOICE_RUNTIME`, `LIVEKIT_*` |
+| LiveKit Cloud | Add only when you replace scripted Twilio calls with realtime voice agents | `VOICE_RUNTIME=livekit`, `LIVEKIT_*`, deployed worker |
 
 ## 2. Vercel Environment Variables
 
@@ -38,7 +46,7 @@ Add these in:
 Vercel project -> Settings -> Environment Variables
 ```
 
-Use these values for production:
+Use these common values for production in both runtime modes:
 
 ```bash
 APP_ENV=production
@@ -61,10 +69,37 @@ DATABASE_URL=postgresql://...
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4.1-mini
 GOOGLE_PLACES_API_KEY=...
+```
+
+Then choose one runtime block.
+
+### Option A: Twilio Runtime
+
+Use this mode for the current production test. It works without LiveKit and without any local worker process.
+
+```bash
 VOICE_RUNTIME=twilio
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
 TWILIO_FROM_NUMBER=+14165550100
+```
+
+With this mode:
+
+- Vercel runs the web app and API in the cloud.
+- Twilio places the outbound call in the cloud.
+- The backend uses Twilio `<Gather>` to ask approved questions one at a time.
+- No LiveKit worker is needed.
+- Your local machine is not used.
+
+If LiveKit env vars are also present, they are ignored for call placement while `VOICE_RUNTIME=twilio`.
+
+### Option B: LiveKit Runtime
+
+Use this mode only after the LiveKit worker is deployed to a long-running cloud runtime.
+
+```bash
+VOICE_RUNTIME=livekit
 LIVEKIT_URL=
 LIVEKIT_API_KEY=
 LIVEKIT_API_SECRET=
@@ -72,7 +107,16 @@ LIVEKIT_SIP_OUTBOUND_TRUNK_ID=
 LIVEKIT_AGENT_NAME=voice-concierge-caller
 LIVEKIT_WEBHOOK_SECRET=
 LIVEKIT_WAIT_UNTIL_ANSWERED=false
+TWILIO_FROM_NUMBER=+14165550100
 ```
+
+With this mode:
+
+- Vercel still runs only the web app and API.
+- LiveKit Cloud handles the realtime room and SIP participant.
+- Twilio can provide the PSTN carrier path through Elastic SIP Trunking.
+- A separate LiveKit worker must be running in the cloud.
+- If the worker is not running, the backend can create the LiveKit room/call, but the AI agent may not join, speak, or return final results.
 
 Do not set `VITE_API_BASE_URL` on Vercel for the current deployment. The frontend and backend are served from the same Vercel origin, so the app uses `/api` automatically.
 
@@ -101,9 +145,13 @@ npx vercel env add OPENAI_API_KEY production
 npx vercel env add OPENAI_MODEL production
 npx vercel env add GOOGLE_PLACES_API_KEY production
 npx vercel env add VOICE_RUNTIME production
+
+# Add these only for VOICE_RUNTIME=twilio:
 npx vercel env add TWILIO_ACCOUNT_SID production
 npx vercel env add TWILIO_AUTH_TOKEN production
 npx vercel env add TWILIO_FROM_NUMBER production
+
+# Add these only for VOICE_RUNTIME=livekit:
 npx vercel env add LIVEKIT_URL production
 npx vercel env add LIVEKIT_API_KEY production
 npx vercel env add LIVEKIT_API_SECRET production
@@ -606,14 +654,15 @@ If the phone does not ring:
 
 ## 4. Real Test Checklist
 
-Use this checklist before sharing the app with users.
+Use this checklist before sharing the app with users. For the current production test, use the Twilio runtime because it does not require a LiveKit worker.
 
-1. Add all required Vercel env vars from section 2.
-2. Confirm the latest deployment started cleanly, or apply the database schema manually if Vercel logs show missing tables.
-3. Confirm Clerk has the production origin configured.
-4. Redeploy production.
-5. Open `https://ai-calling-agent-snowy.vercel.app/health`.
-6. Confirm this response shape:
+1. Add the common Vercel env vars from section 2.
+2. Add the `VOICE_RUNTIME=twilio` block from section 2.
+3. Confirm the latest deployment started cleanly, or apply the database schema manually if Vercel logs show missing tables.
+4. Confirm Clerk has the production origin configured.
+5. Redeploy production after setting or changing `VOICE_RUNTIME`.
+6. Open `https://ai-calling-agent-snowy.vercel.app/health`.
+7. Confirm this Twilio-runtime response shape:
 
 ```json
 {
@@ -622,7 +671,7 @@ Use this checklist before sharing the app with users.
   "google_places_enabled": true,
   "twilio_enabled": true,
   "voice_runtime": "twilio",
-  "livekit_enabled": false,
+  "livekit_enabled": true,
   "livekit_calling_enabled": false,
   "openai_enabled": true,
   "auth_required": true,
@@ -631,17 +680,25 @@ Use this checklist before sharing the app with users.
 }
 ```
 
-7. Open `https://ai-calling-agent-snowy.vercel.app/app`.
-8. Click **Sign in** and complete Clerk login or sign-up.
-9. Run a low-risk test request with one verified number:
+`livekit_enabled` can be `true` or `false` in Twilio mode. If LiveKit env vars are present, it will be `true`; if they are omitted, it will be `false`. The important Twilio-mode checks are:
+
+```text
+voice_runtime=twilio
+twilio_enabled=true
+livekit_calling_enabled=false
+```
+
+8. Open `https://ai-calling-agent-snowy.vercel.app/app`.
+9. Click **Sign in** and complete Clerk login or sign-up.
+10. Run a low-risk test request with one verified number:
 
 ```text
 Call +1 YOUR VERIFIED TEST NUMBER. Say this is an AI assistant calling on behalf of a user and ask whether they are available for a test dinner invitation. Track the answer.
 ```
 
-10. Approve only one call.
-11. Confirm the call status, transcript, extracted answer, and final summary.
-12. Only then test nearby business discovery.
+11. Approve only one call.
+12. Confirm the call status, transcript, extracted answer, and final summary.
+13. Only then test nearby business discovery.
 
 For the first public user test, keep:
 
@@ -651,6 +708,28 @@ ALLOW_CALL_RECORDING=false
 ```
 
 Raise `MAX_CALLS_PER_TASK` after you have confirmed Twilio behavior, summaries, deletion, and abuse controls.
+
+### LiveKit test checklist
+
+Use this only after the LiveKit worker is deployed to a cloud runtime.
+
+1. Add the common Vercel env vars from section 2.
+2. Add the `VOICE_RUNTIME=livekit` block from section 2.
+3. Confirm the Twilio Elastic SIP Trunk and LiveKit outbound SIP trunk are configured.
+4. Deploy `workers/livekit_voice_agent` to a long-running cloud runtime.
+5. Confirm the worker env var `LIVEKIT_AGENT_NAME` matches the Vercel env var `LIVEKIT_AGENT_NAME`.
+6. Redeploy production after changing `VOICE_RUNTIME`.
+7. Confirm `/health` shows:
+
+```json
+{
+  "voice_runtime": "livekit",
+  "livekit_enabled": true,
+  "livekit_calling_enabled": true
+}
+```
+
+8. Run one call to a verified test number before calling real businesses.
 
 ## 5. Deployment And PR Flow
 
@@ -750,6 +829,28 @@ Fix:
 npx vercel env ls
 npx vercel redeploy
 ```
+
+### `/health` shows the wrong `voice_runtime`
+
+Vercel env changes do not affect an already-built deployment. If you changed `VOICE_RUNTIME`, redeploy production and check `/health` again.
+
+Twilio production test should show:
+
+```text
+voice_runtime=twilio
+twilio_enabled=true
+livekit_calling_enabled=false
+```
+
+LiveKit production test should show:
+
+```text
+voice_runtime=livekit
+livekit_enabled=true
+livekit_calling_enabled=true
+```
+
+If `VOICE_RUNTIME=livekit` and no LiveKit worker is deployed, the app can create LiveKit rooms but realtime conversations will not complete reliably. Switch back to `VOICE_RUNTIME=twilio` for production testing until the worker is deployed.
 
 ### `/health` says `auth_configured: false`
 
