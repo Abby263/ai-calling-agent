@@ -6,7 +6,27 @@ Base URL: `http://localhost:8000`
 
 `GET /health`
 
-Returns provider enablement flags and demo-mode status.
+Returns provider enablement flags, demo-mode status, and auth status.
+
+## Auth
+
+`GET /api/auth/session`
+
+Returns whether auth is required/configured and the current signed-in user if a valid session exists.
+
+`GET /api/auth/login`
+
+Starts Sign in with Vercel. Optional query: `next=/app`.
+
+`GET /api/auth/callback`
+
+Completes the Vercel OAuth callback, creates or updates the local user record, and sets a signed session cookie.
+
+`POST /api/auth/logout`
+
+Clears the signed session cookie.
+
+When `AUTH_REQUIRED=true`, task APIs require a signed-in session. The landing page and console route still render publicly.
 
 ## Tasks
 
@@ -83,7 +103,8 @@ Consumes transcription data, runs extraction, and triggers summary generation wh
 ## Error Handling
 
 - `400`: invalid request, blocked category, or no eligible businesses to call.
+- `401`: login is required for task APIs when auth is enabled.
 - `404`: task or call not found.
 - `409`: task is already completed or cancelled.
+- `503`: auth is required but Vercel OAuth env vars are not configured.
 - Provider errors are isolated behind agents; demo fallback is used for planning/search/extraction/summary where configured.
-

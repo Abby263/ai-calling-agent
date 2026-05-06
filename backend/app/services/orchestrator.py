@@ -33,7 +33,7 @@ class TaskOrchestrator:
         self.extractor = TranscriptExtractionAgent(settings)
         self.summary = SummaryAgent(settings)
 
-    async def preview(self, payload: TaskPreviewRequest) -> TaskDetail:
+    async def preview(self, payload: TaskPreviewRequest, user_id: str | None = None) -> TaskDetail:
         intent = await self.parser.parse(payload)
         ensure_allowed_intent(intent)
         radius = payload.filters.radius_meters or intent.radius_meters
@@ -45,6 +45,7 @@ class TaskOrchestrator:
         )
         ranked = self.ranking.rank(businesses, payload.filters)
         return self.store.create_preview(
+            user_id=user_id,
             original_request=payload.original_request,
             parsed_intent=intent,
             location_lat=payload.location.lat,
@@ -54,9 +55,15 @@ class TaskOrchestrator:
             businesses=ranked,
         )
 
-    async def approve_calls(self, task_id: str, payload: ApproveCallsRequest) -> TaskDetail:
-        detail = self.store.get_task(task_id)
+    async def approve_calls(
+        self,
+        task_id: str,
+        payload: ApproveCallsRequest,
+        user_id: str | None = None,
+    ) -> TaskDetail:
+        detail = self.store.get_task(task_id, user_id=user_id)
         if not detail and payload.task_snapshot and payload.task_snapshot.task.id == task_id:
+            payload.task_snapshot.task.user_id = user_id
             detail = self.store.save_task(payload.task_snapshot)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -70,7 +77,10 @@ class TaskOrchestrator:
             max_calls=payload.max_calls,
         )
         if not planned:
-            raise HTTPException(status_code=400, detail={"message": "No eligible businesses to call", "skipped": skipped})
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "No eligible businesses to call", "skipped": skipped},
+            )
 
         calls = []
         for business in planned:
@@ -84,7 +94,11 @@ class TaskOrchestrator:
             calls.append(call)
 
         detail.calls = calls
-        detail.task.status = TaskStatus.SUMMARIZING if all(call.transcript for call in calls) else TaskStatus.CALLING
+        detail.task.status = (
+            TaskStatus.SUMMARIZING
+            if all(call.transcript for call in calls)
+            else TaskStatus.CALLING
+        )
         self.store.save_task(detail)
 
         if all(call.status == CallStatus.COMPLETED and call.extraction_json for call in calls):
@@ -94,8 +108,8 @@ class TaskOrchestrator:
             self.store.set_summary(detail.task.id, summary)
         return self.store.get_task(detail.task.id) or detail
 
-    async def regenerate_summary(self, task_id: str) -> TaskDetail:
-        detail = self.store.get_task(task_id)
+    async def regenerate_summary(self, task_id: str, user_id: str | None = None) -> TaskDetail:
+        detail = self.store.get_task(task_id, user_id=user_id)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
         summary = await self.summary.summarize(detail)

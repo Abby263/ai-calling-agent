@@ -216,3 +216,17 @@ export interface ApproveCallsRequest {
   preferred_call_time?: string | null;
   task_snapshot?: TaskDetail;
 }
+
+export interface AuthUser {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  picture?: string | null;
+}
+
+export interface AuthSession {
+  auth_required: boolean;
+  auth_configured: boolean;
+  authenticated: boolean;
+  user?: AuthUser | null;
+}

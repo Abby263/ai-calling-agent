@@ -6,6 +6,19 @@ from app.schemas import ApproveCallsRequest, SearchFilters, TaskPreviewRequest
 from app.services.orchestrator import TaskOrchestrator
 
 
+def test_production_real_mode_requires_auth_by_default():
+    settings = Settings(APP_ENV="production", DEMO_MODE=False)
+
+    assert settings.auth_required is True
+    assert settings.auth_configured is False
+
+
+def test_auth_can_be_disabled_explicitly_for_non_public_environments():
+    settings = Settings(APP_ENV="production", DEMO_MODE=False, AUTH_REQUIRED=False)
+
+    assert settings.auth_required is False
+
+
 @pytest.mark.asyncio
 async def test_demo_preview_and_calls_complete():
     settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
@@ -89,7 +102,9 @@ async def test_doctor_appointment_request_targets_clinic_and_extracts_availabili
     orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
     preview = await orchestrator.preview(
         TaskPreviewRequest(
-            original_request="Book an appointment with a doctor from Apple Tree at Harbour Street near me.",
+            original_request=(
+                "Book an appointment with a doctor from Apple Tree at Harbour Street near me."
+            ),
             filters=SearchFilters(max_calls=2, radius_meters=3000, min_rating=4),
         )
     )

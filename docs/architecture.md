@@ -4,7 +4,9 @@
 
 ```mermaid
 flowchart LR
-  UI["Web / Mobile UI"] --> API["FastAPI API"]
+  UI["Web / Mobile UI"] --> Auth["Sign in with Vercel"]
+  UI --> API["FastAPI API"]
+  Auth --> API
   API --> Parser["RequestParserAgent"]
   Parser --> Kind{"Task kind"}
   Kind -->|"direct_calls"| Direct["User-provided numbers"]
@@ -20,7 +22,7 @@ flowchart LR
   Webhooks --> Extract["TranscriptExtractionAgent"]
   Extract --> Summary["SummaryAgent"]
   Summary --> UI
-  API --> Store["Task Store / PostgreSQL"]
+  API --> Store["Task Store / Neon Postgres"]
 ```
 
 ## Agent Responsibilities
@@ -64,7 +66,7 @@ The included PostgreSQL schema implements:
 - `summaries`
 - `consent_disclosure_logs`
 
-The API currently uses an in-memory store with the same aggregate shape. Production should add SQLAlchemy or asyncpg repositories and preserve the public Pydantic contracts.
+The API uses an in-memory store in demo mode and a Neon/PostgreSQL store when `DEMO_MODE=false` and `DATABASE_URL` is present. When `AUTH_REQUIRED=true`, task rows are scoped to the authenticated local user record created from the Vercel OAuth subject.
 
 ## Mobile Architecture
 

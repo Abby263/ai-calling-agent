@@ -16,7 +16,7 @@ Live Vercel app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-
 - Landing page: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
 - App console: [https://ai-calling-agent-snowy.vercel.app/app](https://ai-calling-agent-snowy.vercel.app/app)
 
-> Current deployment runs in `DEMO_MODE=true`. It demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
+Check [`/health`](https://ai-calling-agent-snowy.vercel.app/health) to confirm whether the deployed app is in demo mode or connected to production providers. `DEMO_MODE=true` demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
 
 ## Product Summary
 
@@ -70,7 +70,9 @@ The web dashboard includes a light/dark theme toggle for operator use.
 ```mermaid
 flowchart LR
   User["User: voice or text request"] --> Web["React web app"]
+  Web --> Auth["Sign in with Vercel gate"]
   Web --> API["FastAPI API"]
+  Auth --> API
   API --> Parser["RequestParserAgent"]
   Parser --> Intent{"Task kind"}
   Intent -->|Direct numbers| DirectTargets["Direct contact list"]
@@ -87,7 +89,7 @@ flowchart LR
   Transcript --> Extraction["TranscriptExtractionAgent"]
   Extraction --> Summary["SummaryAgent"]
   Summary --> Web
-  API --> Store[("PostgreSQL in production / memory in demo")]
+  API --> Store[("Neon Postgres in production / memory in demo")]
   Orchestrator --> Store
   Extraction --> Store
   Summary --> Store
@@ -98,12 +100,13 @@ flowchart LR
 | Layer | Responsibility |
 | --- | --- |
 | React web app | Intake, voice input, location capture, approval queue, live task status, results, transcripts, export |
-| FastAPI API | Task lifecycle, intent planning, search orchestration, call approval, summary retrieval, deletion |
+| FastAPI API | Auth session checks, task lifecycle, intent planning, search orchestration, call approval, summary retrieval, deletion |
+| Auth | Sign in with Vercel for controlled production tests; public website remains browsable, paid task APIs require login |
 | Agents | Request parsing, search, ranking, call planning, voice call behavior, transcript extraction, summary |
 | Telephony adapter | Outbound call provider abstraction. Current MVP uses Twilio adapter and demo fallback |
 | Places adapter | Google Places integration with demo fallback |
 | AI adapter | OpenAI-powered planning, extraction, and summarization with deterministic fallback in demo mode |
-| Store | In-memory demo store or PostgreSQL-backed task/call/summary persistence |
+| Store | In-memory demo store or Neon Postgres-backed user/task/call/summary persistence |
 | Vercel | Production deployment for the frontend and FastAPI serverless API |
 
 ### Core Use Case: Dinner Invitation
@@ -235,6 +238,10 @@ Open:
 | `MAX_CALLS_PER_TASK` | Yes | Yes | Hard call cap |
 | `DEMO_MODE` | Yes | Yes | Enables or disables real providers |
 | `ALLOW_CALL_RECORDING` | Yes | Optional | Enables recordings when lawful |
+| `AUTH_REQUIRED` | Yes | Yes | Requires login for task APIs; production real mode defaults to true |
+| `AUTH_SESSION_SECRET` | No | Yes when auth is required | Signs auth and OAuth state cookies |
+| `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` | No | Yes when auth is required | Vercel OAuth client id |
+| `VERCEL_APP_CLIENT_SECRET` | No | Yes when auth is required | Vercel OAuth client secret |
 | `OPENAI_API_KEY` | No | Yes | LLM planning, extraction, summary |
 | `OPENAI_MODEL` | Yes | Yes | LLM model name |
 | `GOOGLE_PLACES_API_KEY` | No | Yes for nearby search | Google Places search |
@@ -248,6 +255,10 @@ Open:
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/health` | GET | Runtime health and provider status |
+| `/api/auth/session` | GET | Read auth requirement and current session |
+| `/api/auth/login` | GET | Start Sign in with Vercel OAuth |
+| `/api/auth/callback` | GET | Complete Vercel OAuth callback |
+| `/api/auth/logout` | POST | Clear signed session |
 | `/api/tasks/preview` | POST | Parse request and create approval preview |
 | `/api/tasks/{id}/approve-calls` | POST | Approve targets and start calls |
 | `/api/tasks/{id}` | GET | Fetch task detail |
@@ -263,19 +274,20 @@ This repository is deployed on Vercel at [https://ai-calling-agent-snowy.vercel.
 
 Production setup requires:
 
-1. PostgreSQL database.
+1. Neon Postgres database.
 2. Provider secrets in Vercel environment variables.
 3. `DEMO_MODE=false`.
-4. Twilio webhook URLs pointing to the deployed API.
-5. Google Places key restricted by API and origin/server usage.
-6. OpenAI API key with model access.
-7. A retention and compliance policy for call transcripts and recordings.
+4. `AUTH_REQUIRED=true` plus Vercel OAuth client credentials.
+5. Twilio webhook URLs pointing to the deployed API.
+6. Google Places key restricted by API and origin/server usage.
+7. OpenAI API key with model access.
+8. A retention and compliance policy for call transcripts and recordings.
 
 Recommended production architecture for real realtime calls:
 
 - Keep Vercel for the web dashboard and API facade.
 - Run voice workers separately on LiveKit Cloud, Fly.io, Render, Railway, ECS, or Kubernetes.
-- Use Postgres for durable task state and call artifacts.
+- Use Neon Postgres for durable user, task, and call artifacts.
 - Use Redis or a workflow engine for retries and long-running orchestration.
 
 ## Compliance Model
@@ -312,7 +324,7 @@ The UI screenshots in this README were generated from the running app with Playw
 - Replace demo-mode calls with production Twilio outbound calls.
 - Add LiveKit Agents voice worker for low-latency realtime conversations.
 - Add durable workflow orchestration for retries, cancellation, and call scheduling.
-- Add authenticated user accounts.
+- Add consumer-grade auth after the controlled Vercel-account test phase.
 - Add encrypted transcript and recording storage.
 - Add richer mobile screens in Expo.
 - Add support for salons, clinics, stores, hotels, venues, and appointment-heavy service businesses.

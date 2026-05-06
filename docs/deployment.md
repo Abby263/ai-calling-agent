@@ -2,8 +2,8 @@
 
 ## Phase 1 Production Hardening
 
-1. Replace `InMemoryTaskStore` with a PostgreSQL repository using `backend/app/db/schema.sql`.
-2. Add authentication for users and task ownership.
+1. Use Neon Postgres in production by setting `DEMO_MODE=false` and `DATABASE_URL`.
+2. Enable `AUTH_REQUIRED=true` with Sign in with Vercel credentials for paid task APIs.
 3. Encrypt or redact transcripts at rest.
 4. Add background orchestration with Redis plus Celery, BullMQ, or Temporal.
 5. Add provider retry policies and idempotency keys for call creation.
@@ -16,7 +16,7 @@ Deploy FastAPI on a platform that supports public HTTPS webhooks.
 Recommended runtime:
 
 - Python 3.11+
-- PostgreSQL 16+
+- Neon Postgres or PostgreSQL 16+
 - Redis 7+
 - HTTPS public domain for Twilio callbacks
 
@@ -49,6 +49,15 @@ The repository includes:
 - `requirements.txt` for Python function dependencies.
 
 When the project is connected to GitHub through Vercel Git integration, every merge to the production branch triggers a new production deployment automatically. Pull requests receive preview deployments.
+
+Required production env vars include provider credentials plus:
+
+- `AUTH_REQUIRED=true`
+- `AUTH_SESSION_SECRET`
+- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
+- `VERCEL_APP_CLIENT_SECRET`
+
+The public website remains browsable without login. Task creation, task history, transcripts, approval, cancel, and delete APIs require a signed-in session when auth is enabled.
 
 ## Twilio
 
