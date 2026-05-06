@@ -23,8 +23,11 @@ create table if not exists search_tasks (
   radius integer not null default 3000,
   status text not null default 'draft',
   created_at timestamptz not null default now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  caller_display_name text
 );
+
+alter table search_tasks add column if not exists caller_display_name text;
 
 create table if not exists businesses (
   id uuid primary key default uuid_generate_v4(),

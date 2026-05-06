@@ -1,6 +1,8 @@
+import inspect
 from typing import Any
 
 from app.db import postgres_store
+from app.db.store import InMemoryTaskStore
 
 
 class FakeConnection:
@@ -54,3 +56,32 @@ def test_postgres_store_can_skip_schema_initialization(monkeypatch):
 
     pool = FakeConnectionPool.instances[0]
     assert pool.connection_instance.executed_sql == []
+
+
+def test_postgres_create_preview_accepts_same_kwargs_as_in_memory_store():
+    """Regression for #25 (PR #24 hotfix): the orchestrator calls
+    `store.create_preview(caller_display_name=...)`. Both the InMemoryTaskStore
+    and the PostgresTaskStore must accept that kwarg, otherwise production
+    Postgres deployments 500.
+    """
+    in_memory_kwargs = set(
+        inspect.signature(InMemoryTaskStore.create_preview).parameters.keys()
+    )
+    postgres_kwargs = set(
+        inspect.signature(postgres_store.PostgresTaskStore.create_preview).parameters.keys()
+    )
+
+    missing = in_memory_kwargs - postgres_kwargs
+    assert not missing, (
+        f"PostgresTaskStore.create_preview is missing kwargs present on the in-memory store: {missing}"
+    )
+    assert "caller_display_name" in postgres_kwargs
+
+
+def test_postgres_schema_includes_caller_display_name_column():
+    """Schema must declare or ALTER-add the column the create_preview INSERT uses."""
+    schema_sql = postgres_store.SCHEMA_SQL_PATH.read_text(encoding="utf-8")
+    assert "caller_display_name" in schema_sql, "schema.sql must declare caller_display_name"
+    assert (
+        "alter table search_tasks add column if not exists caller_display_name" in schema_sql
+    ), "schema.sql must include an idempotent ALTER for existing deployments"
