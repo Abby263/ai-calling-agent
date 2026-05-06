@@ -14,6 +14,8 @@ from app.schemas import (
     TaskPreviewRequest,
     TaskStatus,
 )
+from app.schemas import ParsedIntent
+
 from app.services.agents.conversation import (
     CALL_CLOSING_LINE,
     DISCLOSURE_LINE,
@@ -22,6 +24,7 @@ from app.services.agents.conversation import (
     _parse_transcript,
     _scripted_respond,
     _truncate_words,
+    disclosure_for,
 )
 from app.services.compliance import build_turn_prompt
 from app.services.orchestrator import TaskOrchestrator
@@ -210,6 +213,111 @@ async def test_direct_call_request_without_numbers_asks_for_clarification():
     assert "phone number" in intent.constraints["clarifying_questions"][0]
     assert preview.businesses == []
     assert preview.editable_questions
+
+
+def test_disclosure_for_personal_call_uses_provided_name():
+    line = disclosure_for("Vipra", personal=True)
+
+    assert "Vipra" in line
+    assert "AI assistant calling on behalf of Vipra" in line
+
+
+def test_disclosure_for_business_call_omits_name():
+    """Calling a restaurant or clinic should never share the user's name."""
+    line = disclosure_for("Vipra", personal=False)
+
+    assert "Vipra" not in line
+    assert line == DISCLOSURE_LINE
+
+
+def test_disclosure_for_no_name_falls_back_to_generic():
+    line = disclosure_for(None, personal=True)
+    assert line == DISCLOSURE_LINE
+
+
+def test_conversation_opening_uses_caller_name_for_direct_calls():
+    settings = Settings(DEMO_MODE=True)
+    agent = ConversationAgent(settings)
+    call = CallRecord(
+        id="c1",
+        task_id="t1",
+        business_id="b1",
+        business_name="Contact 1",
+        questions=[Question(id="q1", text="Can you join dinner tonight?", required=True)],
+    )
+    intent = ParsedIntent(task_kind="direct_calls", required_questions=[])
+
+    opening = agent.opening(call, intent=intent, caller_display_name="Vipra")
+
+    assert "Vipra" in opening.reply
+    assert "Can you join dinner tonight" in opening.reply
+
+
+def test_conversation_opening_omits_caller_name_for_business_calls():
+    """Restaurant/clinic calls don't get the user's name."""
+    settings = Settings(DEMO_MODE=True)
+    agent = ConversationAgent(settings)
+    call = CallRecord(
+        id="c1",
+        task_id="t1",
+        business_id="b1",
+        business_name="Pizzeria Libretto",
+        questions=[Question(id="q1", text="Are you open tonight?", required=True)],
+    )
+    intent = ParsedIntent(task_kind="nearby_search", required_questions=[])
+
+    opening = agent.opening(call, intent=intent, caller_display_name="Vipra")
+
+    assert "Vipra" not in opening.reply
+    assert "behalf of a user" in opening.reply
+    assert "Are you open tonight" in opening.reply
+
+
+def test_scripted_responder_uses_name_when_callee_asks_who_is_calling():
+    """A personal call should reveal the caller's name when asked."""
+    questions = [
+        Question(id="q1", text="Can you join dinner tonight?", required=True),
+        Question(id="q2", text="What time works for you?", required=True),
+    ]
+    # Opening already asked q1; callee responded with a clarifying question.
+    history = [
+        {"speaker": "AI", "text": "Hi, this is an AI assistant. Can you join dinner tonight?"},
+    ]
+
+    turn = _scripted_respond(
+        questions=questions,
+        history=history,
+        last_utterance="Who is this calling for?",
+        turn_index=1,
+        caller_display_name="Vipra",
+        personal=True,
+    )
+
+    assert "on behalf of Vipra" in turn.reply
+    assert turn.should_end is False
+
+
+def test_scripted_responder_does_not_share_name_for_business_calls():
+    """Even with a name on file, business calls should stay generic."""
+    questions = [
+        Question(id="q1", text="Are you open tonight?", required=True),
+        Question(id="q2", text="Do you have vegan options?", required=True),
+    ]
+    history = [
+        {"speaker": "AI", "text": "Hi, this is an AI assistant. Are you open tonight?"},
+    ]
+
+    turn = _scripted_respond(
+        questions=questions,
+        history=history,
+        last_utterance="Who's calling?",
+        turn_index=1,
+        caller_display_name="Vipra",
+        personal=False,
+    )
+
+    assert "Vipra" not in turn.reply
+    assert "on behalf of a user" in turn.reply
 
 
 def test_conversation_opening_includes_disclosure_and_first_question():

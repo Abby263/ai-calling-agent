@@ -43,6 +43,7 @@ class InMemoryTaskStore:
         location_label: str | None,
         radius: int,
         businesses: list[BusinessCandidate],
+        caller_display_name: str | None = None,
     ) -> TaskDetail:
         task_id = str(uuid4())
         task = SearchTask(
@@ -56,6 +57,7 @@ class InMemoryTaskStore:
             radius=radius,
             status=TaskStatus.AWAITING_APPROVAL,
             created_at=utc_now(),
+            caller_display_name=caller_display_name,
         )
         for business in businesses:
             business.task_id = task_id

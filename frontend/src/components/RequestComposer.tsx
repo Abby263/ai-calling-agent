@@ -70,6 +70,8 @@ export function RequestComposer({
   setFilters,
   location,
   setLocation,
+  callerName,
+  setCallerName,
   onPreview,
   loading,
   error
@@ -80,6 +82,8 @@ export function RequestComposer({
   setFilters: (value: SearchFilters) => void;
   location: LocationInput;
   setLocation: (value: LocationInput) => void;
+  callerName: string;
+  setCallerName: (value: string) => void;
   onPreview: () => void;
   loading: boolean;
   error?: string | null;
@@ -136,6 +140,20 @@ export function RequestComposer({
           </div>
 
           <div className="relative grid gap-4 px-6 pb-6 pt-5">
+            <Field
+              label="Your name (optional)"
+              hint="Used only when calling friends or family. Restaurants, clinics, and other businesses get a generic disclosure."
+            >
+              <Input
+                value={callerName}
+                onChange={(event) => setCallerName(event.target.value)}
+                placeholder="First name is fine — e.g. Vipra"
+                maxLength={80}
+                autoComplete="given-name"
+                aria-label="Your name for the AI to use when introducing"
+              />
+            </Field>
+
             <div className="relative">
               <Textarea
                 value={requestText}

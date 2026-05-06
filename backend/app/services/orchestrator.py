@@ -60,6 +60,7 @@ class TaskOrchestrator:
             location_label=payload.location.label,
             radius=radius,
             businesses=ranked,
+            caller_display_name=_normalize_caller_name(payload.caller_display_name),
         )
 
     async def approve_calls(
@@ -76,6 +77,13 @@ class TaskOrchestrator:
             raise HTTPException(status_code=404, detail="Task not found")
         if detail.task.status in {TaskStatus.CANCELLED, TaskStatus.COMPLETED}:
             raise HTTPException(status_code=409, detail=f"Task is already {detail.task.status}")
+
+        # Allow approve-time override of the caller display name (e.g., signed-in
+        # user updates their preferred display name before the run starts).
+        approve_name = _normalize_caller_name(payload.caller_display_name)
+        if approve_name and approve_name != detail.task.caller_display_name:
+            detail.task.caller_display_name = approve_name
+            self.store.save_task(detail)
 
         planned, skipped = self.call_planner.plan(
             businesses=detail.businesses,
@@ -149,3 +157,13 @@ class TaskOrchestrator:
         if changed:
             return self.store.get_task(detail.task.id, user_id=user_id) or detail
         return detail
+
+def _normalize_caller_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    # Cap to avoid over-long names burning TwiML/TTS time.
+    return cleaned[:80]
+

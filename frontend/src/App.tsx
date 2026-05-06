@@ -339,6 +339,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
   const [location, setLocation] = useState<LocationInput>({ label: "Toronto, ON" });
+  const [callerName, setCallerName] = useState<string>("");
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [history, setHistory] = useState<TaskListItem[]>([]);
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -390,6 +391,17 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   useEffect(() => {
     if (!authLoading) refreshHistory();
   }, [authLoading, refreshHistory]);
+
+  // Seed the caller display name from the signed-in Clerk profile (first name
+  // is plenty — friends/family don't need a full name). User can still edit.
+  useEffect(() => {
+    if (callerName.trim()) return;
+    const profileName = authClient.user?.name?.trim();
+    if (profileName) {
+      const firstName = profileName.split(/\s+/)[0] ?? profileName;
+      setCallerName(firstName);
+    }
+  }, [authClient.user?.name, callerName]);
 
   useEffect(() => {
     if (!task || !shouldPollTask(task)) {
@@ -458,10 +470,12 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
     setLoading(true);
     setError(null);
     try {
+      const trimmedCaller = callerName.trim();
       const preview = await api.previewTask({
         original_request: requestText,
         location,
-        filters
+        filters,
+        caller_display_name: trimmedCaller || null
       });
       setTask(preview);
       setQuestions(preview.editable_questions);
@@ -484,12 +498,14 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
     setLoading(true);
     setError(null);
     try {
+      const trimmedCaller = callerName.trim();
       const updated = await api.approveCalls(task.task.id, {
         business_ids: selectedIds,
         questions: questions.filter((question) => question.text.trim()),
         max_calls: maxCalls,
         preferred_call_time: filters.preferred_call_time,
-        task_snapshot: task
+        task_snapshot: task,
+        caller_display_name: trimmedCaller || null
       });
       setTask(updated);
       setStage(updated.summary ? "results" : "progress");
@@ -510,6 +526,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
       setTask(detail);
       setRequestText(detail.task.original_request);
       setQuestions(detail.editable_questions);
+      if (detail.task.caller_display_name) setCallerName(detail.task.caller_display_name);
       setSelectedIds(detail.businesses.filter((business) => business.selected_for_call).map((business) => business.id));
       if (detail.summary) setStage("results");
       else if (callsAreTerminal(detail)) {
@@ -711,6 +728,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
                   setFilters={setFilters}
                   location={location}
                   setLocation={setLocation}
+                  callerName={callerName}
+                  setCallerName={setCallerName}
                   onPreview={handlePreview}
                   loading={loading}
                   error={error}
