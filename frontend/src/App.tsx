@@ -111,18 +111,23 @@ export default function App() {
   );
 }
 
-function ThemeButton({ darkMode, onToggleTheme }: ThemeControls) {
+function ThemeButton({
+  darkMode,
+  onToggleTheme,
+  showLabel = false
+}: ThemeControls & { showLabel?: boolean }) {
   return (
     <Button
       type="button"
       variant="secondary"
-      className="h-10 w-10 px-0"
+      className={showLabel ? "h-11 px-4" : "h-10 w-10 px-0"}
       aria-label={darkMode ? "Use light mode" : "Use dark mode"}
       aria-pressed={darkMode}
       title={darkMode ? "Use light mode" : "Use dark mode"}
       onClick={onToggleTheme}
     >
-      {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+      {darkMode ? <Sun size={showLabel ? 18 : 16} /> : <Moon size={showLabel ? 18 : 16} />}
+      {showLabel ? <span>{darkMode ? "Light mode" : "Dark mode"}</span> : null}
     </Button>
   );
 }
@@ -183,11 +188,7 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
             </span>
           </button>
           <div className="flex items-center gap-2">
-            <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} />
-            <Button type="button" onClick={onOpenApp}>
-              <ArrowRight size={16} />
-              Open app
-            </Button>
+            <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} showLabel />
           </div>
         </div>
       </header>
