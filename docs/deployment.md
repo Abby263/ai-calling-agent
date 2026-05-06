@@ -54,7 +54,7 @@ Required production env vars include provider credentials plus:
 
 - `AUTH_REQUIRED=true`
 - `CLERK_SECRET_KEY`
-- `VITE_CLERK_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY`
 - `CLERK_AUTHORIZED_PARTIES`
 
 The public website remains browsable without login. Task creation, task history, transcripts, approval, cancel, and delete APIs require a signed-in session when auth is enabled.
