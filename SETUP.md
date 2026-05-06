@@ -50,6 +50,7 @@ ALLOW_CALL_RECORDING=false
 AUTH_REQUIRED=true
 CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_JWKS_URL=https://your-clerk-frontend-api.clerk.accounts.dev/.well-known/jwks.json
 CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app
 
 DATABASE_URL=postgresql://...
@@ -77,6 +78,7 @@ npx vercel env add ALLOW_CALL_RECORDING production
 npx vercel env add AUTH_REQUIRED production
 npx vercel env add CLERK_SECRET_KEY production
 npx vercel env add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY production
+npx vercel env add CLERK_JWKS_URL production
 npx vercel env add CLERK_AUTHORIZED_PARTIES production
 npx vercel env add DATABASE_URL production
 npx vercel env add OPENAI_API_KEY production
@@ -124,19 +126,46 @@ This MVP uses Clerk for sign-in/sign-up. The landing page and console UI stay pu
 2. In Clerk Dashboard, open **Configure -> API keys**.
 3. Copy the publishable key and add it to Vercel as `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`. The app also supports `VITE_CLERK_PUBLISHABLE_KEY`.
 4. Copy the secret key and add it to Vercel as `CLERK_SECRET_KEY`.
-5. In Clerk Dashboard, confirm these URLs are allowed for the production instance:
+5. Copy the **Frontend API URL** from the same API keys page. It looks similar to:
+
+```text
+https://dear-pangolin-76.clerk.accounts.dev
+```
+
+6. Build the JWKS URL by adding `/.well-known/jwks.json` to that Frontend API URL:
+
+```text
+https://dear-pangolin-76.clerk.accounts.dev/.well-known/jwks.json
+```
+
+7. Add that full URL to Vercel as `CLERK_JWKS_URL`.
+8. In Clerk Dashboard, confirm these URLs are allowed for the production instance:
 
 ```text
 https://ai-calling-agent-snowy.vercel.app
 https://ai-calling-agent-snowy.vercel.app/app
 ```
 
-6. Add `CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app` to Vercel. This makes the backend reject Clerk tokens minted for another origin.
-7. Set `AUTH_REQUIRED=true`.
+9. Add `CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app` to Vercel. This makes the backend reject Clerk tokens minted for another origin.
+10. Set `AUTH_REQUIRED=true`.
+
+Important: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_JWKS_URL` must all come from the same Clerk application and same environment. Do not mix a `pk_test_...` publishable key with an unrelated `sk_live_...` secret key. If the keys are from different Clerk instances, the browser can show you as signed in but the API will reject task creation with `Your Clerk session token could not be verified by the API.`
+
+For the current production deployment, the frontend key belongs to this Clerk Frontend API URL:
+
+```bash
+CLERK_JWKS_URL=https://dear-pangolin-76.clerk.accounts.dev/.well-known/jwks.json
+```
+
+Add it with the Vercel CLI:
+
+```bash
+npx vercel env add CLERK_JWKS_URL production --value https://dear-pangolin-76.clerk.accounts.dev/.well-known/jwks.json --yes
+npx vercel deploy --prod --yes
+```
 
 Optional advanced values:
 
-- `CLERK_JWKS_URL`: use a specific Clerk JWKS URL instead of the Clerk Backend API JWKS endpoint.
 - `CLERK_JWT_ISSUER`: verify a specific Clerk issuer URL.
 
 ### OpenAI: `OPENAI_API_KEY`
