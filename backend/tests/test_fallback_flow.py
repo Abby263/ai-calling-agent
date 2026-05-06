@@ -19,6 +19,14 @@ def test_auth_can_be_disabled_explicitly_for_non_public_environments():
     assert settings.auth_required is False
 
 
+def test_clerk_secret_configures_auth_gate():
+    settings = Settings(APP_ENV="production", DEMO_MODE=False, CLERK_SECRET_KEY="sk_test_demo")
+
+    assert settings.auth_required is True
+    assert settings.auth_configured is True
+    assert settings.clerk_jwks_endpoint == "https://api.clerk.com/v1/jwks"
+
+
 @pytest.mark.asyncio
 async def test_demo_preview_and_calls_complete():
     settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)

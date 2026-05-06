@@ -21,7 +21,7 @@ Required:
 | OpenAI | Parses requests, extracts call answers, and writes summaries | `OPENAI_API_KEY`, `OPENAI_MODEL` |
 | Google Places | Finds nearby businesses for discovery requests | `GOOGLE_PLACES_API_KEY` |
 | Twilio Voice | Places outbound phone calls | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
-| Sign in with Vercel | Gates paid task execution and stored task data | `AUTH_REQUIRED`, `AUTH_SESSION_SECRET`, `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET` |
+| Clerk | Sign-in/sign-up and auth gate for paid task execution | `AUTH_REQUIRED`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` |
 
 Optional for this MVP:
 
@@ -48,7 +48,9 @@ MAX_CALLS_PER_TASK=5
 DEMO_MODE=false
 ALLOW_CALL_RECORDING=false
 AUTH_REQUIRED=true
-AUTH_SESSION_SECRET=<random-32-byte-secret>
+CLERK_SECRET_KEY=sk_live_...
+VITE_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app
 
 DATABASE_URL=postgresql://...
 OPENAI_API_KEY=sk-...
@@ -57,8 +59,6 @@ GOOGLE_PLACES_API_KEY=...
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
 TWILIO_FROM_NUMBER=+14165550100
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
-VERCEL_APP_CLIENT_SECRET=...
 ```
 
 Do not set `VITE_API_BASE_URL` on Vercel for the current deployment. The frontend and backend are served from the same Vercel origin, so the app uses `/api` automatically.
@@ -75,7 +75,9 @@ npx vercel env add MAX_CALLS_PER_TASK production
 npx vercel env add DEMO_MODE production
 npx vercel env add ALLOW_CALL_RECORDING production
 npx vercel env add AUTH_REQUIRED production
-npx vercel env add AUTH_SESSION_SECRET production
+npx vercel env add CLERK_SECRET_KEY production
+npx vercel env add VITE_CLERK_PUBLISHABLE_KEY production
+npx vercel env add CLERK_AUTHORIZED_PARTIES production
 npx vercel env add DATABASE_URL production
 npx vercel env add OPENAI_API_KEY production
 npx vercel env add OPENAI_MODEL production
@@ -83,8 +85,6 @@ npx vercel env add GOOGLE_PLACES_API_KEY production
 npx vercel env add TWILIO_ACCOUNT_SID production
 npx vercel env add TWILIO_AUTH_TOKEN production
 npx vercel env add TWILIO_FROM_NUMBER production
-npx vercel env add NEXT_PUBLIC_VERCEL_APP_CLIENT_ID production
-npx vercel env add VERCEL_APP_CLIENT_SECRET production
 ```
 
 After changing any Vercel env var, redeploy:
@@ -116,37 +116,28 @@ You can also paste the contents of `backend/app/db/schema.sql` into the Neon SQL
 
 The app only uses Neon when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Neon, deployed task history is not reliable.
 
-### Vercel Sign-In: `AUTH_*` and Vercel OAuth
+### Clerk: `CLERK_*` and `VITE_CLERK_PUBLISHABLE_KEY`
 
-This MVP uses Sign in with Vercel as the first auth gate. The landing page and console UI stay public, but creating tasks, approving calls, reading stored task history, reading transcripts, canceling tasks, and deleting tasks require login when `AUTH_REQUIRED=true`.
+This MVP uses Clerk for sign-in/sign-up. The landing page and console UI stay public, but creating tasks, approving calls, reading stored task history, reading transcripts, canceling tasks, and deleting tasks require login when `AUTH_REQUIRED=true`.
 
-Important: Sign in with Vercel means users sign in with an existing Vercel account. That is acceptable for a controlled production test. For broad consumer sign-up later, use Clerk, Auth0, or another consumer identity provider.
-
-1. Open Vercel and go to the Integrations Console for your account/team.
-2. Create a new integration/app for this product.
-3. Add this production redirect URL:
-
-```text
-https://ai-calling-agent-snowy.vercel.app/api/auth/callback
-```
-
-4. Add this local redirect URL only if you plan to test OAuth locally:
+1. Create a Clerk application.
+2. In Clerk Dashboard, open **Configure -> API keys**.
+3. Copy the publishable key and add it to Vercel as `VITE_CLERK_PUBLISHABLE_KEY`.
+4. Copy the secret key and add it to Vercel as `CLERK_SECRET_KEY`.
+5. In Clerk Dashboard, confirm these URLs are allowed for the production instance:
 
 ```text
-http://localhost:8000/api/auth/callback
+https://ai-calling-agent-snowy.vercel.app
+https://ai-calling-agent-snowy.vercel.app/app
 ```
 
-5. Enable identity scopes for OpenID, email, and profile.
-6. Copy the client id to `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`.
-7. Copy the client secret to `VERCEL_APP_CLIENT_SECRET`.
-8. Generate a session secret:
+6. Add `CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app` to Vercel. This makes the backend reject Clerk tokens minted for another origin.
+7. Set `AUTH_REQUIRED=true`.
 
-```bash
-openssl rand -base64 32
-```
+Optional advanced values:
 
-9. Add it to Vercel as `AUTH_SESSION_SECRET`.
-10. Set `AUTH_REQUIRED=true`.
+- `CLERK_JWKS_URL`: use a specific Clerk JWKS URL instead of the Clerk Backend API JWKS endpoint.
+- `CLERK_JWT_ISSUER`: verify a specific Clerk issuer URL.
 
 ### OpenAI: `OPENAI_API_KEY`
 
@@ -195,7 +186,7 @@ Use this checklist before sharing the app with users.
 
 1. Add all required Vercel env vars from section 2.
 2. Apply the database schema.
-3. Confirm Sign in with Vercel has the production callback URL.
+3. Confirm Clerk has the production origin configured.
 4. Redeploy production.
 5. Open `https://ai-calling-agent-snowy.vercel.app/health`.
 6. Confirm this response shape:
@@ -213,7 +204,7 @@ Use this checklist before sharing the app with users.
 ```
 
 7. Open `https://ai-calling-agent-snowy.vercel.app/app`.
-8. Click **Sign in with Vercel** and complete login.
+8. Click **Sign in** and complete Clerk login or sign-up.
 9. Run a low-risk test request with one verified number:
 
 ```text
@@ -334,12 +325,12 @@ npx vercel redeploy
 
 ### `/health` says `auth_configured: false`
 
-Check all four auth env vars in Vercel production:
+Check the Clerk auth env vars in Vercel production:
 
 - `AUTH_REQUIRED=true`
-- `AUTH_SESSION_SECRET`
-- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
-- `VERCEL_APP_CLIENT_SECRET`
+- `CLERK_SECRET_KEY`
+- `VITE_CLERK_PUBLISHABLE_KEY`
+- `CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app`
 
 Then redeploy production.
 

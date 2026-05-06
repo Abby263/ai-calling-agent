@@ -36,11 +36,13 @@ class Settings(BaseSettings):
     allow_call_recording: bool = Field(default=False, alias="ALLOW_CALL_RECORDING")
 
     auth_required_setting: bool | None = Field(default=None, alias="AUTH_REQUIRED")
-    auth_session_secret: str | None = Field(default=None, alias="AUTH_SESSION_SECRET")
-    vercel_app_client_id: str | None = Field(default=None, alias="NEXT_PUBLIC_VERCEL_APP_CLIENT_ID")
-    vercel_app_client_secret: str | None = Field(default=None, alias="VERCEL_APP_CLIENT_SECRET")
-    vercel_oauth_client_id: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_ID")
-    vercel_oauth_client_secret: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_SECRET")
+    clerk_secret_key: str | None = Field(default=None, alias="CLERK_SECRET_KEY")
+    clerk_jwks_url: str | None = Field(default=None, alias="CLERK_JWKS_URL")
+    clerk_jwt_issuer: str | None = Field(default=None, alias="CLERK_JWT_ISSUER")
+    clerk_authorized_parties_raw: str | None = Field(
+        default=None,
+        alias="CLERK_AUTHORIZED_PARTIES",
+    )
 
     @property
     def backend_cors_origins(self) -> list[str]:
@@ -65,14 +67,6 @@ class Settings(BaseSettings):
         return bool(self.google_places_api_key) and not self.demo_mode
 
     @property
-    def vercel_client_id(self) -> str | None:
-        return self.vercel_app_client_id or self.vercel_oauth_client_id
-
-    @property
-    def vercel_client_secret(self) -> str | None:
-        return self.vercel_app_client_secret or self.vercel_oauth_client_secret
-
-    @property
     def auth_required(self) -> bool:
         if self.auth_required_setting is not None:
             return self.auth_required_setting
@@ -80,11 +74,21 @@ class Settings(BaseSettings):
 
     @property
     def auth_configured(self) -> bool:
-        return bool(
-            self.auth_session_secret
-            and self.vercel_client_id
-            and self.vercel_client_secret
-        )
+        return bool(self.clerk_secret_key or self.clerk_jwks_url)
+
+    @property
+    def clerk_jwks_endpoint(self) -> str:
+        return self.clerk_jwks_url or "https://api.clerk.com/v1/jwks"
+
+    @property
+    def clerk_authorized_parties(self) -> list[str]:
+        if self.clerk_authorized_parties_raw:
+            return [
+                origin.strip()
+                for origin in self.clerk_authorized_parties_raw.split(",")
+                if origin.strip()
+            ]
+        return [self.public_base_url.rstrip("/"), *self.backend_cors_origins]
 
 
 @lru_cache

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Activity,
-  ArrowRight,
   Bot,
   Building2,
   CalendarCheck,
@@ -59,6 +59,22 @@ const initialFilters: SearchFilters = {
 
 type RouteName = "landing" | "console";
 
+export type AppAuthClient = {
+  frontendConfigured: boolean;
+  isLoaded: boolean;
+  isSignedIn: boolean;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    picture?: string | null;
+  } | null;
+  accountControl?: ReactNode;
+  signIn: () => void;
+  signUp: () => void;
+  signOut: () => void;
+};
+
 type ThemeControls = {
   darkMode: boolean;
   onToggleTheme: () => void;
@@ -66,17 +82,23 @@ type ThemeControls = {
 
 type LandingPageProps = ThemeControls & {
   onOpenApp: () => void;
+  authClient: AppAuthClient;
 };
 
 type ConsolePageProps = ThemeControls & {
   onGoHome: () => void;
+  authClient: AppAuthClient;
+};
+
+type AppProps = {
+  authClient: AppAuthClient;
 };
 
 function routeFromPath(): RouteName {
   return window.location.pathname.startsWith("/app") ? "console" : "landing";
 }
 
-export default function App() {
+export default function App({ authClient }: AppProps) {
   const [route, setRoute] = useState<RouteName>(() => routeFromPath());
   const [darkMode, setDarkMode] = useState(() => {
     const stored = window.localStorage.getItem("theme");
@@ -108,9 +130,19 @@ export default function App() {
   const toggleTheme = useCallback(() => setDarkMode((value) => !value), []);
 
   return route === "console" ? (
-    <ConsolePage darkMode={darkMode} onToggleTheme={toggleTheme} onGoHome={() => navigate("landing")} />
+    <ConsolePage
+      darkMode={darkMode}
+      onToggleTheme={toggleTheme}
+      onGoHome={() => navigate("landing")}
+      authClient={authClient}
+    />
   ) : (
-    <LandingPage darkMode={darkMode} onToggleTheme={toggleTheme} onOpenApp={() => navigate("console")} />
+    <LandingPage
+      darkMode={darkMode}
+      onToggleTheme={toggleTheme}
+      onOpenApp={() => navigate("console")}
+      authClient={authClient}
+    />
   );
 }
 
@@ -135,7 +167,115 @@ function ThemeButton({
   );
 }
 
-function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
+function ProductHeader({
+  darkMode,
+  onToggleTheme,
+  onOpenApp,
+  onGoHome,
+  authClient,
+  current
+}: ThemeControls & {
+  onOpenApp: () => void;
+  onGoHome?: () => void;
+  authClient: AppAuthClient;
+  current: "landing" | "dashboard";
+}) {
+  const navItems = [
+    { label: "Overview", href: "/", action: onGoHome },
+    { label: "Use cases", href: "/#use-cases" },
+    { label: "Workflow", href: "/#how-it-works" },
+    { label: "Architecture", href: "/#architecture" },
+    { label: "Dashboard", href: "/app", action: onOpenApp }
+  ];
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/86">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-3 text-left"
+          onClick={onGoHome ?? (() => window.scrollTo({ top: 0, behavior: "smooth" }))}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-lifted">
+            <PhoneCall size={18} />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-display text-base font-semibold text-slate-950 dark:text-white">
+              Voice Concierge Agent
+            </span>
+            <span className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
+              Approved AI calling workspace
+            </span>
+          </span>
+        </button>
+
+        <nav className="hidden items-center rounded-xl border border-slate-200 bg-white/70 p-1 shadow-soft dark:border-slate-800 dark:bg-slate-900/60 lg:flex">
+          {navItems.map((item) => {
+            const active =
+              (current === "landing" && item.label === "Overview") ||
+              (current === "dashboard" && item.label === "Dashboard");
+            return (
+              <a
+                key={item.label}
+                href={item.href}
+                onClick={(event) => {
+                  if (item.action) {
+                    event.preventDefault();
+                    item.action();
+                  }
+                }}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                }`}
+              >
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {authClient.frontendConfigured && authClient.isSignedIn ? (
+            authClient.accountControl
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              className="hidden h-10 px-4 sm:inline-flex"
+              onClick={authClient.frontendConfigured ? authClient.signIn : undefined}
+              disabled={!authClient.frontendConfigured || !authClient.isLoaded}
+            >
+              <LogIn size={16} />
+              Sign in
+            </Button>
+          )}
+          <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} showLabel />
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6 lg:hidden">
+        {navItems.map((item) => (
+          <a
+            key={item.label}
+            href={item.href}
+            onClick={(event) => {
+              if (item.action) {
+                event.preventDefault();
+                item.action();
+              }
+            }}
+            className="whitespace-nowrap rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200"
+          >
+            {item.label}
+          </a>
+        ))}
+      </div>
+    </header>
+  );
+}
+
+function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: LandingPageProps) {
   const useCases = [
     {
       title: "Restaurant discovery",
@@ -177,24 +317,13 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
 
   return (
     <main className="min-h-screen text-ink dark:text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/80">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <button type="button" className="flex items-center gap-3 text-left" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-lifted">
-              <PhoneCall size={18} />
-            </span>
-            <span>
-              <span className="block font-display text-base font-semibold text-slate-950 dark:text-white">
-                Voice Concierge Agent
-              </span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">Approved AI calling workspace</span>
-            </span>
-          </button>
-          <div className="flex items-center gap-2">
-            <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} showLabel />
-          </div>
-        </div>
-      </header>
+      <ProductHeader
+        darkMode={darkMode}
+        onToggleTheme={onToggleTheme}
+        onOpenApp={onOpenApp}
+        authClient={authClient}
+        current="landing"
+      />
 
       <section className="relative isolate min-h-[78svh] overflow-hidden border-b border-slate-200/70 dark:border-slate-800/80">
         <img
@@ -264,7 +393,7 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
         </div>
       </section>
 
-      <section className="bg-white/70 py-12 dark:bg-slate-950/40">
+      <section id="use-cases" className="bg-white/70 py-12 dark:bg-slate-950/40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-4 md:grid-cols-4">
             {useCases.map((item) => {
@@ -319,9 +448,9 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
         </div>
       </section>
 
-      <section className="py-14">
+      <section id="architecture" className="py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-3xl">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
                 Production architecture
@@ -330,10 +459,6 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
                 Built for approvals, calls, evidence, and summaries.
               </h2>
             </div>
-            <Button type="button" variant="secondary" onClick={onOpenApp}>
-              <ArrowRight size={16} />
-              Use the console
-            </Button>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {platform.map((item) => {
@@ -370,15 +495,17 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
 function AuthNotice({
   session,
   loading,
+  authClient,
   onSignIn
 }: {
   session: AuthSession | null;
   loading: boolean;
+  authClient: AppAuthClient;
   onSignIn: () => void;
 }) {
-  if (loading || !session?.auth_required || session.authenticated) return null;
+  if (loading || !session?.auth_required || authClient.isSignedIn) return null;
 
-  const configured = session.auth_configured;
+  const configured = session.auth_configured && authClient.frontendConfigured;
   return (
     <section
       className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-soft ${
@@ -404,21 +531,21 @@ function AuthNotice({
           <p className="mt-1 max-w-3xl text-sm leading-6 opacity-80">
             {configured
               ? "The website is public, but creating tasks, viewing stored task data, and approving calls requires a signed-in session."
-              : "Set AUTH_REQUIRED, AUTH_SESSION_SECRET, NEXT_PUBLIC_VERCEL_APP_CLIENT_ID, and VERCEL_APP_CLIENT_SECRET in Vercel before real users test the paid flow."}
+              : "Set CLERK_SECRET_KEY and VITE_CLERK_PUBLISHABLE_KEY in Vercel before real users test the paid flow."}
           </p>
         </div>
       </div>
       {configured ? (
         <Button type="button" onClick={onSignIn}>
           <LogIn size={16} />
-          Sign in with Vercel
+          Sign in with Clerk
         </Button>
       ) : null}
     </section>
   );
 }
 
-function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
+function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsolePageProps) {
   const [stage, setStage] = useState<Stage>("request");
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
@@ -440,6 +567,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
       setAuthSession(await api.getAuthSession());
     } catch {
       setAuthSession({
+        provider: "clerk",
         auth_required: false,
         auth_configured: false,
         authenticated: false,
@@ -451,7 +579,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
   }, []);
 
   const refreshHistory = useCallback(async () => {
-    if (authSession?.auth_required && !authSession.authenticated) {
+    if (authSession?.auth_required && !authClient.isSignedIn) {
       setHistory([]);
       return;
     }
@@ -460,11 +588,11 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
     } catch {
       setHistory([]);
     }
-  }, [authSession?.auth_required, authSession?.authenticated]);
+  }, [authClient.isSignedIn, authSession?.auth_required]);
 
   useEffect(() => {
-    refreshAuth();
-  }, [refreshAuth]);
+    if (authClient.isLoaded) refreshAuth();
+  }, [authClient.isLoaded, authClient.isSignedIn, refreshAuth]);
 
   useEffect(() => {
     if (!authLoading) refreshHistory();
@@ -490,12 +618,15 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
 
   function handleAuthGate(): boolean {
     if (!authSession?.auth_required) return false;
-    if (!authSession.auth_configured) {
-      setError("Authentication is required, but Vercel OAuth is not configured yet.");
+    if (!authSession.auth_configured || !authClient.frontendConfigured) {
+      setError("Authentication is required, but Clerk is not configured yet.");
       return true;
     }
-    if (!authSession.authenticated) {
-      api.login();
+    if (!authClient.isLoaded) {
+      return true;
+    }
+    if (!authClient.isSignedIn) {
+      authClient.signIn();
       return true;
     }
     return false;
@@ -503,7 +634,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
 
   function handleApiFailure(err: unknown, fallback: string) {
     if (err instanceof ApiError && err.status === 401) {
-      api.login();
+      authClient.signIn();
       return;
     }
     setError(err instanceof Error ? err.message : fallback);
@@ -513,11 +644,10 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
     setLoading(true);
     setError(null);
     try {
-      await api.logout();
+      authClient.signOut();
       setTask(null);
       setStage("request");
       setHistory([]);
-      await refreshAuth();
     } catch (err) {
       handleApiFailure(err, "Sign out failed.");
     } finally {
@@ -657,6 +787,14 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
         aria-hidden
         className="pointer-events-none fixed inset-0 -z-10 bg-grid-light bg-[size:32px_32px] opacity-60 dark:bg-grid-dark"
       />
+      <ProductHeader
+        darkMode={darkMode}
+        onToggleTheme={onToggleTheme}
+        onOpenApp={() => window.history.replaceState({}, "", "/app")}
+        onGoHome={onGoHome}
+        authClient={authClient}
+        current="dashboard"
+      />
       <div className="mx-auto max-w-[88rem] px-3 py-4 sm:px-5 sm:py-6">
         <div className="grid gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
           <div className="order-1 grid gap-5 lg:order-2">
@@ -705,11 +843,11 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
                       AI disclosure
                     </Badge>
                     {authSession?.auth_required ? (
-                      authSession.authenticated ? (
+                      authClient.isSignedIn ? (
                         <>
                           <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                             <UserCircle size={12} />
-                            {authSession.user?.name || authSession.user?.email || "Signed in"}
+                            {authClient.user?.name || authClient.user?.email || "Signed in"}
                           </Badge>
                           <Button
                             type="button"
@@ -729,8 +867,12 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
                           type="button"
                           variant="secondary"
                           className="h-10 px-4"
-                          onClick={api.login}
-                          disabled={authLoading || !authSession.auth_configured}
+                          onClick={authClient.signIn}
+                          disabled={
+                            authLoading ||
+                            !authSession.auth_configured ||
+                            !authClient.frontendConfigured
+                          }
                         >
                           <LogIn size={16} />
                           Sign in
@@ -836,7 +978,12 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
               </div>
             </header>
 
-            <AuthNotice session={authSession} loading={authLoading} onSignIn={api.login} />
+            <AuthNotice
+              session={authSession}
+              loading={authLoading}
+              authClient={authClient}
+              onSignIn={authClient.signIn}
+            />
 
             <div className="animate-fade-in">
               {stage === "request" ? (
