@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.api.routes import _append_speech_turn
+from app.api.routes import _append_speech_turn, _append_turn
 from app.core.config import Settings
 from app.db.store import InMemoryTaskStore
 from app.schemas import (
@@ -13,6 +13,15 @@ from app.schemas import (
     SearchFilters,
     TaskPreviewRequest,
     TaskStatus,
+)
+from app.services.agents.conversation import (
+    CALL_CLOSING_LINE,
+    DISCLOSURE_LINE,
+    MAX_TURNS,
+    ConversationAgent,
+    _parse_transcript,
+    _scripted_respond,
+    _truncate_words,
 )
 from app.services.compliance import build_turn_prompt
 from app.services.orchestrator import TaskOrchestrator
@@ -201,6 +210,122 @@ async def test_direct_call_request_without_numbers_asks_for_clarification():
     assert "phone number" in intent.constraints["clarifying_questions"][0]
     assert preview.businesses == []
     assert preview.editable_questions
+
+
+def test_conversation_opening_includes_disclosure_and_first_question():
+    settings = Settings(DEMO_MODE=True)
+    agent = ConversationAgent(settings)
+    call = CallRecord(
+        id="c1",
+        task_id="t1",
+        business_id="b1",
+        business_name="Contact 1",
+        questions=[
+            Question(id="q1", text="Can you join dinner tonight?", required=True),
+            Question(id="q2", text="What time works for you?", required=True),
+        ],
+    )
+
+    opening = agent.opening(call)
+
+    assert "AI assistant" in opening.reply
+    assert "Can you join dinner tonight" in opening.reply
+    assert opening.should_end is False
+    # Numbered prompts ("Question 1 of 2") would feel robotic — make sure we don't ship them.
+    assert "Question 1 of" not in opening.reply
+
+
+def test_scripted_responder_steers_back_after_callee_question():
+    questions = [
+        Question(id="q1", text="Can you join dinner tonight?", required=True),
+        Question(id="q2", text="What time works for you?", required=True),
+    ]
+    history = [
+        {"speaker": "AI", "text": "Hi, this is an AI assistant. Can you join dinner tonight?"},
+    ]
+
+    turn = _scripted_respond(
+        questions=questions,
+        history=history,
+        last_utterance="Who is this calling for?",
+        turn_index=1,
+    )
+
+    assert turn.should_end is False
+    assert "What time works for you" in turn.reply
+    assert turn.reply.lower().startswith("i'm just calling on behalf")
+
+
+def test_scripted_responder_wraps_up_after_all_questions_answered():
+    questions = [
+        Question(id="q1", text="Can you join dinner tonight?", required=True),
+    ]
+    history = [
+        {"speaker": "AI", "text": "Can you join dinner tonight?"},
+        {"speaker": "Callee", "text": "Yes, count me in."},
+    ]
+
+    turn = _scripted_respond(
+        questions=questions,
+        history=history,
+        last_utterance="Yes, count me in.",
+        turn_index=2,
+    )
+
+    assert turn.should_end is True
+    assert turn.reply == CALL_CLOSING_LINE
+
+
+@pytest.mark.asyncio
+async def test_conversation_respond_hard_caps_at_max_turns():
+    settings = Settings(DEMO_MODE=True)
+    agent = ConversationAgent(settings)
+    call = CallRecord(
+        id="c1",
+        task_id="t1",
+        business_id="b1",
+        business_name="Contact 1",
+        transcript="AI: hi.\nCallee: hi.",
+        questions=[Question(id="q1", text="Quick check?", required=True)],
+    )
+
+    turn = await agent.respond(
+        call=call,
+        last_utterance="still talking",
+        turn_index=MAX_TURNS,
+    )
+
+    assert turn.should_end is True
+    assert turn.reply == CALL_CLOSING_LINE
+
+
+def test_truncate_words_caps_long_replies():
+    long_text = " ".join([str(i) for i in range(60)])
+    truncated = _truncate_words(long_text, 5)
+    assert truncated.split()[-1].rstrip(".") == "4"
+    assert truncated.endswith(".")
+
+
+def test_parse_transcript_handles_multiple_turns_and_blank_lines():
+    transcript = "AI: hi there\n\nCallee: hi back\nAI: question?\nCallee:"
+
+    parsed = _parse_transcript(transcript)
+
+    assert parsed == [
+        {"speaker": "AI", "text": "hi there"},
+        {"speaker": "Callee", "text": "hi back"},
+        {"speaker": "AI", "text": "question?"},
+    ]
+
+
+def test_append_turn_preserves_history_and_skips_blanks():
+    transcript = _append_turn(None, "AI", "Hi there")
+    transcript = _append_turn(transcript, "Callee", "Hi back")
+    transcript = _append_turn(transcript, "AI", "")  # ignored
+
+    assert transcript == "AI: Hi there\nCallee: Hi back"
+    assert "Speech confidence" not in transcript
+    assert DISCLOSURE_LINE  # imported sentinel — keeps the import live
 
 
 def test_in_memory_store_tracks_usage_and_clears_history():

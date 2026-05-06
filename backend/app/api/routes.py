@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
@@ -14,6 +15,11 @@ from app.schemas import (
     TaskListItem,
     TaskPreviewRequest,
 )
+from app.services.agents.conversation import (
+    CALL_CLOSING_LINE as CONVO_CLOSING_LINE,
+    MAX_TURNS,
+    ConversationAgent,
+)
 from app.services.agents.transcript_extraction import TranscriptExtractionAgent
 from app.services.auth import AuthenticatedUser, ClerkAuthService
 from app.services.compliance import (
@@ -22,6 +28,12 @@ from app.services.compliance import (
     build_call_script,
     build_turn_prompt,
 )
+
+# Hard cap on the wall-clock duration of a single conversational call. Keeps the
+# call short and natural — we'd rather wrap up than ramble.
+MAX_CALL_SECONDS = 75
+# Twilio voice that sounds noticeably more human than the legacy "alice".
+TWILIO_VOICE = "Polly.Joanna"
 
 router = APIRouter(prefix="/api")
 
@@ -136,34 +148,47 @@ async def delete_tasks(request: Request) -> Response:
 
 @router.post("/webhooks/twilio/voice/{call_id}")
 async def twilio_voice(call_id: str, request: Request) -> Response:
+    """Initial TwiML when Twilio picks up the line.
+
+    Drives a natural opening utterance (AI disclosure + first question) and asks
+    Twilio to gather speech for the next turn.
+    """
     found = store(request).find_call(call_id)
     if not found:
         raise HTTPException(status_code=404, detail="Call not found")
-    _, call = found
-    script = build_call_script(call.questions)
-    transcribe_callback = (
-        f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/transcript/{call.id}"
-    )
-    speech_callback = (
-        f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/0"
-    )
-    if request.app.state.settings.allow_call_recording:
+    detail, call = found
+    settings = request.app.state.settings
+
+    if settings.allow_call_recording:
+        # Recording mode is left as-is for now: a single block recording with
+        # post-call transcription. This is a fallback; the conversational flow
+        # below is preferred.
+        script = build_call_script(call.questions)
+        transcribe_callback = (
+            f"{settings.public_base_url}/api/webhooks/twilio/transcript/{call.id}"
+        )
         record_attrs = (
             'maxLength="120" playBeep="false" transcribe="true" '
             f'transcribeCallback="{transcribe_callback}"'
         )
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">{_xml_escape(script)}</Say>
+  <Say voice="{TWILIO_VOICE}">{_xml_escape(script)}</Say>
   <Pause length="1"/>
   <Record {record_attrs}/>
-  <Say voice="alice">Thank you. Goodbye.</Say>
+  <Say voice="{TWILIO_VOICE}">{_xml_escape(CALL_CLOSING_LINE)}</Say>
 </Response>"""
-    else:
-        twiml = _speech_gather_twiml(
-            action_url=speech_callback,
-            prompt=build_turn_prompt(call.questions, 0),
-        )
+        return Response(content=twiml, media_type="application/xml")
+
+    intent = detail.task.parsed_intent_json if detail else None
+    opening = ConversationAgent(settings).opening(call, intent=intent)
+    call.transcript = _append_turn(call.transcript, "AI", opening.reply)
+    store(request).update_call(detail.task.id, call)
+
+    next_url = (
+        f"{settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/1"
+    )
+    twiml = _speech_gather_twiml(action_url=next_url, prompt=opening.reply)
     return Response(content=twiml, media_type="application/xml")
 
 
@@ -196,53 +221,65 @@ async def twilio_status(
     return {"ok": "true"}
 
 
-@router.post("/webhooks/twilio/speech/{call_id}/{question_index}")
+@router.post("/webhooks/twilio/speech/{call_id}/{turn_index}")
 async def twilio_speech(
     call_id: str,
-    question_index: int,
+    turn_index: int,
     request: Request,
     SpeechResult: str | None = Form(default=None),
     Confidence: str | None = Form(default=None),
 ) -> Response:
+    """One conversational turn.
+
+    The path's `turn_index` is 1-based and counts how many AI turns have already
+    been spoken (the opening utterance is turn 0). On each call we record what
+    the callee said, ask the ConversationAgent for the next reply, and either
+    keep gathering or wrap up.
+    """
     found = store(request).find_call(call_id)
     if not found:
         raise HTTPException(status_code=404, detail="Call not found")
     detail, call = found
-    call.transcript = _append_speech_turn(
-        transcript=call.transcript,
-        questions=call.questions,
-        question_index=question_index,
-        speech_result=SpeechResult,
-        confidence=Confidence,
-    )
-    questions = approved_questions(call.questions)
-    next_index = question_index + 1
-    if next_index < len(questions):
-        call.status = CallStatus.CALLING
-        store(request).update_call(detail.task.id, call)
-        next_callback = (
-            f"{request.app.state.settings.public_base_url}"
-            f"/api/webhooks/twilio/speech/{call.id}/{next_index}"
-        )
-        return Response(
-            content=_speech_gather_twiml(
-                action_url=next_callback,
-                prompt=build_turn_prompt(call.questions, next_index),
-            ),
-            media_type="application/xml",
+    settings = request.app.state.settings
+
+    callee_text = (SpeechResult or "").strip()
+    if callee_text:
+        suffix = f" (confidence {Confidence})" if Confidence else ""
+        call.transcript = _append_turn(
+            call.transcript,
+            "Callee",
+            f"{callee_text}{suffix}",
         )
 
-    call.status = CallStatus.COMPLETED
-    call.ended_at = utc_now()
-    call.extraction_json = await TranscriptExtractionAgent(request.app.state.settings).extract(call)
-    updated = store(request).update_call(detail.task.id, call)
-    if updated:
-        await orchestrator(request).finalize_if_ready(updated.task.id)
-    twiml = """<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice">Thank you. That is all I needed. Goodbye.</Say>
-</Response>"""
-    return Response(content=twiml, media_type="application/xml")
+    elapsed = _elapsed_seconds(call)
+    over_time = elapsed >= MAX_CALL_SECONDS
+    over_turns = turn_index > MAX_TURNS
+
+    if over_time or over_turns:
+        return _end_call(request, detail, call, reply=CONVO_CLOSING_LINE)
+
+    intent = detail.task.parsed_intent_json if detail else None
+    turn = await ConversationAgent(settings).respond(
+        call=call,
+        last_utterance=callee_text or None,
+        turn_index=turn_index,
+        intent=intent,
+    )
+
+    call.transcript = _append_turn(call.transcript, "AI", turn.reply)
+    call.status = CallStatus.CALLING
+    store(request).update_call(detail.task.id, call)
+
+    if turn.should_end:
+        return _end_call(request, detail, call, reply=turn.reply, already_appended=True)
+
+    next_url = (
+        f"{settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/{turn_index + 1}"
+    )
+    return Response(
+        content=_speech_gather_twiml(action_url=next_url, prompt=turn.reply),
+        media_type="application/xml",
+    )
 
 
 @router.post("/webhooks/twilio/transcript/{call_id}")
@@ -337,6 +374,7 @@ def _append_speech_turn(
     speech_result: str | None,
     confidence: str | None = None,
 ) -> str:
+    """Legacy helper kept for the test suite — single AI question, single answer."""
     filtered = approved_questions(questions)
     question_text = (
         filtered[question_index].text.strip()
@@ -350,15 +388,80 @@ def _append_speech_turn(
     return f"{current}\n{turn}".strip() if current else turn
 
 
+def _append_turn(transcript: str | None, speaker: str, text: str) -> str:
+    text = text.strip()
+    if not text:
+        return transcript or ""
+    line = f"{speaker}: {text}"
+    if not transcript:
+        return line
+    return f"{transcript.strip()}\n{line}"
+
+
+def _elapsed_seconds(call) -> float:
+    if not call.started_at:
+        return 0.0
+    now = datetime.now(UTC)
+    delta = now - call.started_at
+    return max(delta.total_seconds(), 0.0)
+
+
+def _end_call(request, detail, call, *, reply: str, already_appended: bool = False) -> Response:
+    """Speak the closing reply, hang up, and finalize the call in the background."""
+    if not already_appended:
+        call.transcript = _append_turn(call.transcript, "AI", reply)
+    call.status = CallStatus.COMPLETED
+    call.ended_at = utc_now()
+    store(request).update_call(detail.task.id, call)
+
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        f"  <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(reply)}</Say>\n"
+        "  <Hangup/>\n"
+        "</Response>"
+    )
+
+    asyncio.create_task(
+        _finalize_call_async(
+            request.app.state.settings,
+            request.app.state.store,
+            request.app.state.orchestrator,
+            detail.task.id,
+            call.id,
+        )
+    )
+    return Response(content=twiml, media_type="application/xml")
+
+
+async def _finalize_call_async(settings, store_obj, orchestrator_obj, task_id: str, call_id: str) -> None:
+    found = store_obj.find_call(call_id)
+    if not found:
+        return
+    detail, call = found
+    if call.extraction_json is None:
+        call.extraction_json = await TranscriptExtractionAgent(settings).extract(call)
+    store_obj.update_call(detail.task.id, call)
+    await orchestrator_obj.finalize_if_ready(detail.task.id)
+
+
 def _speech_gather_twiml(*, action_url: str, prompt: str) -> str:
+    """TwiML that speaks the prompt and gathers a natural speech response.
+
+    `speechTimeout="auto"` lets Twilio detect end-of-utterance (good for
+    conversation), and we use the conversation-tuned model for better recognition.
+    """
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<Response>\n"
         f'  <Gather input="speech" action="{action_url}" method="POST" '
-        'timeout="8" speechTimeout="auto" actionOnEmptyResult="true">\n'
-        f"    <Say voice=\"alice\">{_xml_escape(prompt)}</Say>\n"
+        'timeout="6" speechTimeout="auto" '
+        'speechModel="experimental_conversations" '
+        'actionOnEmptyResult="true">\n'
+        f"    <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(prompt)}</Say>\n"
         "  </Gather>\n"
-        f"  <Say voice=\"alice\">{_xml_escape(CALL_CLOSING_LINE)}</Say>\n"
+        f"  <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(CALL_CLOSING_LINE)}</Say>\n"
+        "  <Hangup/>\n"
         "</Response>"
     )
 
