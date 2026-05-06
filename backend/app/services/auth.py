@@ -25,13 +25,19 @@ class ClerkAuthService:
         self.settings = settings
 
     def session_payload(self, request: Request) -> dict[str, object]:
-        session = self.get_session(request)
+        auth_error: str | None = None
+        try:
+            session = self.get_session(request, raise_errors=True)
+        except HTTPException as exc:
+            session = None
+            auth_error = str(exc.detail)
         return {
             "provider": "clerk",
             "auth_required": self.settings.auth_required,
             "auth_configured": self.settings.auth_configured,
             "authenticated": session is not None,
             "user": _public_user(session) if session else None,
+            "auth_error": auth_error,
         }
 
     def require_user(self, request: Request) -> AuthenticatedUser | None:
@@ -42,12 +48,17 @@ class ClerkAuthService:
                 status_code=503,
                 detail="Authentication is required but Clerk is not configured.",
             )
-        session = self.get_session(request)
+        session = self.get_session(request, raise_errors=True)
         if session is None:
             raise HTTPException(status_code=401, detail="Sign in with Clerk is required.")
         return session
 
-    def get_session(self, request: Request) -> AuthenticatedUser | None:
+    def get_session(
+        self,
+        request: Request,
+        *,
+        raise_errors: bool = False,
+    ) -> AuthenticatedUser | None:
         if not self.settings.auth_configured:
             return None
         token = self._session_token(request)
@@ -56,6 +67,8 @@ class ClerkAuthService:
         try:
             claims = self._verify_token(token)
         except HTTPException:
+            if raise_errors:
+                raise
             return None
 
         subject = _optional_string(claims.get("sub"))
