@@ -91,7 +91,7 @@ export function BusinessPreview({
 
   return (
     <section className="grid gap-5">
-      <div className="surface-strong relative overflow-hidden p-5 sm:p-6">
+      <div className="surface-strong sticky top-[4.75rem] z-20 overflow-hidden p-5 sm:p-6">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-brand-gradient opacity-10 blur-3xl"
@@ -157,39 +157,6 @@ export function BusinessPreview({
             </Button>
           </div>
         </div>
-      </div>
-
-      <div className="surface sticky top-[5.25rem] z-20 flex flex-wrap items-center justify-between gap-3 p-3 shadow-lifted">
-        <div>
-          <p className="text-sm font-semibold text-slate-950 dark:text-white">
-            Ready to approve?
-          </p>
-          <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-            {disabledReason ??
-              `${selectedIds.length} selected, ${approvedQuestions} question${
-                approvedQuestions === 1 ? "" : "s"
-              } prepared. Calls begin only after this approval.`}
-          </p>
-        </div>
-        <Button
-          type="button"
-          onClick={onApprove}
-          disabled={approveDisabled}
-          title={disabledReason ?? "Approve selected targets and start calls"}
-          className="min-w-[14rem] px-5"
-        >
-          {loading ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              Starting calls
-            </>
-          ) : (
-            <>
-              <CheckCircle2 size={16} />
-              Approve and start
-            </>
-          )}
-        </Button>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -387,30 +354,9 @@ export function BusinessPreview({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={onBack}>
-              Back
-            </Button>
-            <Button
-              type="button"
-              onClick={onApprove}
-              disabled={approveDisabled}
-              title={disabledReason ?? "Approve selected targets and start calls"}
-              className="flex-1 px-5"
-            >
-              {loading ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                  Starting calls
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={15} />
-                  Approve and start
-                </>
-              )}
-            </Button>
-          </div>
+          <Button type="button" variant="secondary" onClick={onBack} className="w-full justify-center">
+            Back to intake
+          </Button>
           <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
             <ShieldCheck size={14} className="mt-0.5 shrink-0" />
             <span>
