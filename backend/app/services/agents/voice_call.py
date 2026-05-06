@@ -206,10 +206,20 @@ class VoiceCallAgent:
         if not questions:
             return f"AI: {build_call_script(call.questions)}\n{call.business_name}: {answers[0]}"
         lines: list[str] = []
+        last_index = len(questions) - 1
         for index, _question in enumerate(questions):
             lines.append(f"AI: {build_turn_prompt(call.questions, index)}")
-            if index < len(answers):
+            if index < last_index and index < len(answers):
                 lines.append(f"{call.business_name}: {answers[index]}")
+            elif index == last_index:
+                # Dump any remaining canned answers under the last question so
+                # the simulated transcript always carries every detail (the
+                # extractor needs phrases like "no follow-up needed" to land
+                # somewhere). This keeps the demo generic regardless of how
+                # many questions the parser produced.
+                tail = answers[index:] if index < len(answers) else answers
+                if tail:
+                    lines.append(f"{call.business_name}: {' '.join(tail)}")
         return "\n".join(lines)
 
     def _demo_clinic_transcript(self, call: CallRecord) -> str:

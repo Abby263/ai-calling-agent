@@ -92,6 +92,10 @@ class ConversationAgent:
             if llm_reply:
                 return ConversationTurn(reply=llm_reply, should_end=False)
 
+        # The first approved question carries the topic — just open with it.
+        # Goal-aware parses produce specific questions (LLM path) or surface
+        # the user's verbatim request (non-LLM fallback). Either way the
+        # callee hears what the call is about right away.
         first = questions[0].text.strip().rstrip("?.")
         return ConversationTurn(
             reply=f"{disclosure} {first}?",
@@ -257,11 +261,12 @@ def _scripted_respond(
     caller_display_name: str | None = None,
     personal: bool = False,
 ) -> ConversationTurn:
-    """Friendlier-than-the-old-flow scripted responder.
+    """Scripted responder used when the LLM isn't configured.
 
-    Each turn moves to the next required question once the previous one has been
-    answered. If the callee asked a question (utterance ends with a question mark)
-    we acknowledge briefly before steering back to the goal.
+    Walks through the approved questions one at a time. If the callee asked a
+    question we acknowledge briefly without inventing context (the LLM-driven
+    path is what handles topic-correction nuance — this is just a safe
+    fallback).
     """
     if not questions:
         return ConversationTurn(reply=CALL_CLOSING_LINE, should_end=True)
@@ -301,6 +306,7 @@ def _is_personal_call(intent: ParsedIntent | None) -> bool:
     if intent is None:
         return False
     return intent.task_kind == "direct_calls"
+
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +367,7 @@ _RESPOND_SYSTEM_PROMPT = """You are an AI phone caller. You're mid-call and need
 
 You will be given JSON with:
 - callee_name: who you are calling
-- objective: what the user asked you to find out
+- objective: what the user asked you to find out — this is your single source of truth about why this call exists
 - questions: the list of questions the user approved (id + text)
 - transcript_so_far: prior turns ([{speaker, text}])
 - last_callee_utterance: what the callee just said
@@ -374,11 +380,12 @@ Your job:
 1. Keep replies natural, human-sounding, and short (1–2 sentences, ≤ 25 words).
 2. Never repeat the AI disclosure — it was said in the opening.
 3. If the callee asked who is calling and is_personal_call is true with a caller_display_name, answer with that name; otherwise just say "a user" — never share private info about the user.
-4. If the callee asked a different question, answer briefly, then steer back to the goal.
-5. If their answer was unclear or partial, ask a quick clarifying follow-up.
-6. Once every approved question has a clear answer (or the callee declined), wrap up warmly and set should_end=true.
-7. If turn_index is close to max_turns and questions remain, ask the most important one and wrap up gracefully.
-8. Do NOT invent facts about the user. If the callee asks for details you don't have, say you'll have the user follow up.
+4. CRITICAL — never invent context. The `objective` field is the ONLY thing you know about why this call is happening. If the callee guesses a topic ("Is this about the dinner?", "Are you calling about the project?"), do NOT confirm unless that exact topic appears in `objective` or `questions`. If their guess is wrong, politely correct: "Actually I'm calling about <objective>." Agreeing with a wrong guess is the worst possible outcome.
+5. If the callee genuinely doesn't know what the call is about, restate the objective in plain language and ask the most important question.
+6. If their answer was unclear or partial, ask a quick clarifying follow-up.
+7. Once every approved question has a clear answer (or the callee declined), wrap up warmly and set should_end=true.
+8. If turn_index is close to max_turns and questions remain, ask the most important one and wrap up gracefully.
+9. If the callee asks for details you don't have, say "I don't have those details — I'll have <caller> follow up." Never make up dates, places, prices, or specifics.
 
 Return ONLY a JSON object with this exact shape:
 {

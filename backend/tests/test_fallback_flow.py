@@ -203,7 +203,10 @@ async def test_direct_phone_number_task_tracks_general_answers():
         "+14165550103",
     ]
     assert [target.name for target in preview.businesses] == ["Contact 1", "Contact 2", "Contact 3"]
-    assert "dinner tonight" in preview.editable_questions[0].text
+    # The non-LLM fallback embeds the user's request verbatim instead of
+    # template-matching it. Any quick request should round-trip cleanly.
+    first_question_text = preview.editable_questions[0].text
+    assert "Invite them for dinner tonight" in first_question_text
 
     approved = await orchestrator.approve_calls(
         preview.task.id,
@@ -229,6 +232,59 @@ async def test_direct_phone_number_task_tracks_general_answers():
     ]
     assert outcomes == ["accepted", "maybe", "declined"]
     assert follow_up == ["no", "yes", "no"]
+
+
+@pytest.mark.asyncio
+async def test_direct_call_fallback_embeds_user_request_verbatim():
+    """Regression for the production "ask their plans for the weekend" failure.
+
+    The non-LLM parser fallback must NOT use a generic "what answer should I
+    pass back?" template. It should surface the user's actual request so the
+    AI on the call has a concrete topic to ask about.
+    """
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
+    preview = await orchestrator.preview(
+        TaskPreviewRequest(
+            original_request="Call +1 437 220 1120 and ask their plans for the weekend",
+            filters=SearchFilters(max_calls=1),
+        )
+    )
+
+    intent = preview.task.parsed_intent_json
+    assert intent.task_kind == "direct_calls"
+    # Question must reference the actual goal, not a generic template.
+    first = preview.editable_questions[0].text
+    assert "what answer should i pass back" not in first.lower()
+    assert "plans for the weekend" in first.lower()
+    # Objective must also reflect the real ask.
+    assert "plans for the weekend" in intent.call_objective.lower()
+
+
+@pytest.mark.asyncio
+async def test_direct_call_fallback_handles_arbitrary_quick_requests():
+    """The fallback must be generic — any quick request should produce a
+    question that quotes the user's goal, with no template-matching."""
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
+    requests = [
+        ("Call +1 555 010 0101 and check if they can attend Friday's demo", "friday"),
+        ("Call +1 555 010 0102 and find out about the project status", "project status"),
+        (
+            "Call +1 555 010 0103 and ask them their thoughts on the new proposal",
+            "proposal",
+        ),
+    ]
+    for request_text, expected_keyword in requests:
+        preview = await orchestrator.preview(
+            TaskPreviewRequest(
+                original_request=request_text,
+                filters=SearchFilters(max_calls=1),
+            )
+        )
+        first = preview.editable_questions[0].text.lower()
+        assert "what answer should i pass back" not in first, request_text
+        assert expected_keyword in first, request_text
 
 
 @pytest.mark.asyncio

@@ -12,15 +12,30 @@ SYSTEM_PROMPT = """You are RequestParserAgent for a voice concierge app.
 Return only valid JSON. The app supports:
 1. direct_calls: user provides phone numbers and asks the agent to call them for a general purpose.
 2. nearby_search: user asks to find nearby businesses before calling.
+
 Extract task_kind, direct_phone_numbers, call_objective, constraints, call questions,
-summary criteria, and whether calls are required. Never invent private user details.
-For direct_calls, ask only the minimum questions needed to complete the user's stated request.
-For confusing requests, set constraints.needs_clarification=true and include
-constraints.clarifying_questions with the missing information. Do not invent missing phone
-numbers, locations, dates, appointment details, or medical/personal details.
-For appointment or clinic requests, ask about availability and booking requirements only; do not
-ask for symptoms, diagnosis, insurance, health card numbers, or private medical details.
-Always return at least one required question when calls_required=true."""
+summary criteria, and whether calls are required.
+
+CRITICAL — required_questions for direct_calls:
+- The questions are what the AI says to the callee, in the second person ("Are you …?",
+  "What is your …?", "Could you share …?"). They must be specific to the user's actual request.
+- Anchor every question on the user's request text. If the user asked about "their plans for the
+  weekend", the first question is "What are your plans for the weekend?" — never a generic
+  template like "What answer should I pass back?" or "Is any follow-up needed?".
+- Generate the *minimum* number of questions needed (usually 1, sometimes 2 if a follow-up like
+  "is there anything else we should know?" is genuinely useful). Do not pad.
+- The questions must read naturally when spoken aloud. No numbered prefixes ("Question 1 of 3"
+  is forbidden). No internal jargon. Phrase each like a friendly human would.
+
+Other rules:
+- Never invent private user details. If the user asked you to call about something but didn't
+  give details (e.g., date, time, address, price), do NOT make them up — the AI on the call will
+  say "I'll have <user> follow up with details" if asked.
+- For confusing requests, set constraints.needs_clarification=true and include
+  constraints.clarifying_questions with the missing information.
+- For appointment or clinic requests, ask about availability and booking requirements only; do
+  not ask for symptoms, diagnosis, insurance, health card numbers, or other medical details.
+- Always return at least one required question when calls_required=true."""
 
 
 class RequestParserAgent:
@@ -100,10 +115,10 @@ class RequestParserAgent:
                 task_kind="direct_calls",
                 business_type="contact",
                 search_target="user-provided phone numbers",
-                call_objective=self._direct_call_objective(text),
+                call_objective=self._direct_call_objective(request_text),
                 direct_phone_numbers=[],
                 radius_meters=filters.radius_meters,
-                required_questions=self._direct_call_questions(text),
+                required_questions=self._direct_call_questions(request_text),
                 constraints={
                     "needs_clarification": True,
                     "clarifying_questions": [
@@ -220,9 +235,8 @@ class RequestParserAgent:
         filters: SearchFilters,
         phone_numbers: list[str],
     ) -> ParsedIntent:
-        text = request_text.lower()
-        objective = self._direct_call_objective(text)
-        questions = self._direct_call_questions(text)
+        objective = self._direct_call_objective(request_text)
+        questions = self._direct_call_questions(request_text)
         return ParsedIntent(
             task_kind="direct_calls",
             business_type="contact",
@@ -288,7 +302,7 @@ class RequestParserAgent:
     ) -> list[Question]:
         text = request_text.lower()
         if task_kind == "direct_calls" or self._looks_like_direct_call_request(request_text):
-            return self._direct_call_questions(text)
+            return self._direct_call_questions(request_text)
         dietary = filters.dietary_preference
         for option in ["vegan", "vegetarian", "gluten-free", "halal", "kosher"]:
             if option in text:
@@ -347,41 +361,37 @@ class RequestParserAgent:
             parts.append("near me")
         return " ".join(parts)
 
-    def _direct_call_questions(self, text: str) -> list[Question]:
-        if any(word in text for word in ["dinner", "lunch", "party", "invite", "invitation"]):
-            meal = "dinner" if "dinner" in text else "lunch" if "lunch" in text else "the event"
-            timing = " tonight" if "tonight" in text else ""
-            questions = [
-                (
-                    f"I am calling on behalf of the user to invite you for {meal}{timing}. "
-                    "Would you like to join?"
-                ),
-                (
-                    "Are you available at the proposed time, or should the user follow up "
-                    "with another time?"
-                ),
-                "Is there anything the user should know before confirming the plan?",
-            ]
-        else:
-            questions = [
-                (
-                    "I am calling on behalf of the user about their request. "
-                    "What answer should I pass back?"
-                ),
-                "Is any follow-up needed from the user?",
-                "Is there anything else the user should know?",
-            ]
-        return [Question(id=f"q_{uuid4().hex[:8]}", text=question) for question in questions]
+    def _direct_call_questions(self, request_text: str) -> list[Question]:
+        """Non-LLM fallback for direct calls.
 
-    def _direct_call_objective(self, text: str) -> str:
-        if "dinner" in text and any(word in text for word in ["invite", "inviting", "invitation"]):
-            return "Invite the provided contacts for dinner and track each response."
-        if "appointment" in text:
-            return (
-                "Call the provided contacts to ask about appointment availability "
-                "and track responses."
-            )
-        return "Call the provided phone numbers, ask the approved questions, and track each answer."
+        The OpenAI parser is the primary path and produces specific,
+        request-anchored questions for any quick request. This fallback only
+        runs when OpenAI isn't configured or the call failed. We deliberately
+        do NOT try to template-match the user's intent here (no "is this a
+        dinner invite?" / "did they say 'ask if'?" pattern matching) — instead
+        we relay the user's request verbatim and let the conversation agent
+        handle the rest. That keeps this generic for any quick request.
+        """
+        question_text = self._build_relay_question(request_text)
+        return [
+            Question(id=f"q_{uuid4().hex[:8]}", text=question_text),
+        ]
+
+    def _direct_call_objective(self, request_text: str) -> str:
+        """Non-LLM fallback objective. Relays the user's request verbatim."""
+        cleaned = request_text.strip().rstrip(".?! ")
+        if not cleaned:
+            return "Relay the user's request and capture the response."
+        return f"Relay the user's request to the contact and capture the response. Request: \"{cleaned}\"."
+
+    def _build_relay_question(self, request_text: str) -> str:
+        cleaned = request_text.strip().rstrip(".?! ")
+        if not cleaned:
+            return "Could you share a quick answer the user can act on?"
+        return (
+            f"The user's request is: \"{cleaned}\". "
+            "Could you share your answer so I can pass it back?"
+        )
 
     def _extract_phone_numbers(
         self,
