@@ -500,59 +500,6 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: Landing
   );
 }
 
-function AuthNotice({
-  session,
-  loading,
-  authClient,
-  onSignIn
-}: {
-  session: AuthSession | null;
-  loading: boolean;
-  authClient: AppAuthClient;
-  onSignIn: () => void;
-}) {
-  if (loading || !session?.auth_required || authClient.isSignedIn) return null;
-
-  const configured = session.auth_configured && authClient.frontendConfigured;
-  return (
-    <section
-      className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-soft ${
-        configured
-          ? "border-brand-200 bg-brand-50/90 text-brand-900 dark:border-brand-900/60 dark:bg-brand-950/35 dark:text-brand-100"
-          : "border-amber-200 bg-amber-50/90 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
-      }`}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        <span
-          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-            configured
-              ? "bg-white text-brand-700 dark:bg-slate-950 dark:text-brand-300"
-              : "bg-white text-amber-700 dark:bg-slate-950 dark:text-amber-300"
-          }`}
-        >
-          <LockKeyhole size={17} />
-        </span>
-        <div>
-          <p className="font-semibold">
-            {configured ? "Sign in to run paid tasks" : "Authentication setup is incomplete"}
-          </p>
-          <p className="mt-1 max-w-3xl text-sm leading-6 opacity-80">
-            {configured
-              ? "The website is public, but creating tasks, viewing stored task data, and approving calls requires a signed-in session."
-              : "Set CLERK_SECRET_KEY and VITE_CLERK_PUBLISHABLE_KEY in Vercel before real users test the paid flow."}
-          </p>
-        </div>
-      </div>
-      {configured ? (
-        <Button type="button" onClick={onSignIn}>
-          <LogIn size={16} />
-          Sign in with Clerk
-        </Button>
-      ) : null}
-    </section>
-  );
-}
-
 function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsolePageProps) {
   const [stage, setStage] = useState<Stage>("request");
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
@@ -927,13 +874,6 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                 </div>
               </div>
             </header>
-
-            <AuthNotice
-              session={authSession}
-              loading={authLoading}
-              authClient={authClient}
-              onSignIn={authClient.signIn}
-            />
 
             <div className="animate-fade-in">
               {stage === "request" ? (
