@@ -411,6 +411,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       setMaxCalls(filters.max_calls);
       setSelectedIds(preview.businesses.slice(0, filters.max_calls).map((business) => business.id));
       setStage("preview");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       refreshHistory();
     } catch (err) {
       handleApiFailure(err, "Preview failed.");

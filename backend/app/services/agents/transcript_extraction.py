@@ -315,13 +315,15 @@ class TranscriptExtractionAgent:
         if not transcript:
             return None
         lines = [line.strip() for line in transcript.splitlines() if line.strip()]
-        for line in reversed(lines):
+        responses: list[str] = []
+        for line in lines:
             if line.startswith("AI:"):
                 continue
             if ":" in line:
-                return line.split(":", 1)[1].strip()
-            return line
-        return None
+                responses.append(line.split(":", 1)[1].strip())
+            else:
+                responses.append(line)
+        return " ".join(response for response in responses if response).strip() or None
 
     def _looks_like_clinic_call(self, call: CallRecord) -> bool:
         name = call.business_name.lower()

@@ -14,7 +14,12 @@ from app.schemas import (
 )
 from app.services.agents.transcript_extraction import TranscriptExtractionAgent
 from app.services.auth import AuthenticatedUser, ClerkAuthService
-from app.services.compliance import build_call_script
+from app.services.compliance import (
+    CALL_CLOSING_LINE,
+    approved_questions,
+    build_call_script,
+    build_turn_prompt,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -116,7 +121,7 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
         f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/transcript/{call.id}"
     )
     speech_callback = (
-        f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/speech/{call.id}"
+        f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/0"
     )
     if request.app.state.settings.allow_call_recording:
         record_attrs = (
@@ -131,13 +136,10 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
   <Say voice="alice">Thank you. Goodbye.</Say>
 </Response>"""
     else:
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Gather input="speech" action="{speech_callback}" method="POST" timeout="8" speechTimeout="auto">
-    <Say voice="alice">{_xml_escape(script)}</Say>
-  </Gather>
-  <Say voice="alice">Thank you. Goodbye.</Say>
-</Response>"""
+        twiml = _speech_gather_twiml(
+            action_url=speech_callback,
+            prompt=build_turn_prompt(call.questions, 0),
+        )
     return Response(content=twiml, media_type="application/xml")
 
 
@@ -170,9 +172,10 @@ async def twilio_status(
     return {"ok": "true"}
 
 
-@router.post("/webhooks/twilio/speech/{call_id}")
+@router.post("/webhooks/twilio/speech/{call_id}/{question_index}")
 async def twilio_speech(
     call_id: str,
+    question_index: int,
     request: Request,
     SpeechResult: str | None = Form(default=None),
     Confidence: str | None = Form(default=None),
@@ -181,8 +184,30 @@ async def twilio_speech(
     if not found:
         raise HTTPException(status_code=404, detail="Call not found")
     detail, call = found
-    if SpeechResult:
-        call.transcript = _build_speech_transcript(call, SpeechResult, Confidence)
+    call.transcript = _append_speech_turn(
+        transcript=call.transcript,
+        questions=call.questions,
+        question_index=question_index,
+        speech_result=SpeechResult,
+        confidence=Confidence,
+    )
+    questions = approved_questions(call.questions)
+    next_index = question_index + 1
+    if next_index < len(questions):
+        call.status = CallStatus.CALLING
+        store(request).update_call(detail.task.id, call)
+        next_callback = (
+            f"{request.app.state.settings.public_base_url}"
+            f"/api/webhooks/twilio/speech/{call.id}/{next_index}"
+        )
+        return Response(
+            content=_speech_gather_twiml(
+                action_url=next_callback,
+                prompt=build_turn_prompt(call.questions, next_index),
+            ),
+            media_type="application/xml",
+        )
+
     call.status = CallStatus.COMPLETED
     call.ended_at = utc_now()
     call.extraction_json = await TranscriptExtractionAgent(request.app.state.settings).extract(call)
@@ -236,15 +261,37 @@ def _map_twilio_status(status: str | None, answered_by: str | None) -> CallStatu
     return CallStatus.PENDING
 
 
-def _build_speech_transcript(
-    call,
-    speech_result: str,
+def _append_speech_turn(
+    *,
+    transcript: str | None,
+    questions,
+    question_index: int,
+    speech_result: str | None,
     confidence: str | None = None,
 ) -> str:
-    suffix = f" (speech confidence {confidence})" if confidence else ""
+    filtered = approved_questions(questions)
+    question_text = (
+        filtered[question_index].text.strip()
+        if 0 <= question_index < len(filtered)
+        else "Approved question"
+    )
+    answer = speech_result.strip() if speech_result else "No answer captured."
+    suffix = f" Speech confidence: {confidence}." if confidence else ""
+    current = transcript.strip() if transcript else ""
+    turn = f"AI: {question_text}\nCallee: {answer}{suffix}"
+    return f"{current}\n{turn}".strip() if current else turn
+
+
+def _speech_gather_twiml(*, action_url: str, prompt: str) -> str:
     return (
-        f"AI: {build_call_script(call.questions)}\n"
-        f"{call.business_name}: {speech_result.strip()}{suffix}"
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        f'  <Gather input="speech" action="{action_url}" method="POST" '
+        'timeout="8" speechTimeout="auto" actionOnEmptyResult="true">\n'
+        f"    <Say voice=\"alice\">{_xml_escape(prompt)}</Say>\n"
+        "  </Gather>\n"
+        f"  <Say voice=\"alice\">{_xml_escape(CALL_CLOSING_LINE)}</Say>\n"
+        "</Response>"
     )
 
 

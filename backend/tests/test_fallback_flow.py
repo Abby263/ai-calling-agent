@@ -2,16 +2,19 @@ from uuid import uuid4
 
 import pytest
 
+from app.api.routes import _append_speech_turn
 from app.core.config import Settings
 from app.db.store import InMemoryTaskStore
 from app.schemas import (
     ApproveCallsRequest,
     CallRecord,
     CallStatus,
+    Question,
     SearchFilters,
     TaskPreviewRequest,
     TaskStatus,
 )
+from app.services.compliance import build_turn_prompt
 from app.services.orchestrator import TaskOrchestrator
 
 
@@ -34,6 +37,49 @@ def test_clerk_secret_configures_auth_gate():
     assert settings.auth_required is True
     assert settings.auth_configured is True
     assert settings.clerk_jwks_endpoint == "https://api.clerk.com/v1/jwks"
+
+
+def test_scripted_twilio_prompt_asks_one_question_at_a_time():
+    questions = [
+        Question(id="q1", text="Can you come to dinner tonight?", required=True),
+        Question(id="q2", text="Do you need the address?", required=True),
+    ]
+
+    first_prompt = build_turn_prompt(questions, 0)
+    second_prompt = build_turn_prompt(questions, 1)
+
+    assert "Question 1 of 2" in first_prompt
+    assert "Can you come to dinner tonight?" in first_prompt
+    assert "Do you need the address?" not in first_prompt
+    assert "Question 2 of 2" in second_prompt
+    assert "Do you need the address?" in second_prompt
+
+
+def test_speech_turns_append_question_and_answer_separately():
+    questions = [
+        Question(id="q1", text="Can you come to dinner tonight?", required=True),
+        Question(id="q2", text="Do you need the address?", required=True),
+    ]
+
+    transcript = _append_speech_turn(
+        transcript=None,
+        questions=questions,
+        question_index=0,
+        speech_result="Yes, I can come.",
+        confidence="0.91",
+    )
+    transcript = _append_speech_turn(
+        transcript=transcript,
+        questions=questions,
+        question_index=1,
+        speech_result="Please text me the address.",
+        confidence="0.88",
+    )
+
+    assert "AI: Can you come to dinner tonight?" in transcript
+    assert "Callee: Yes, I can come. Speech confidence: 0.91." in transcript
+    assert "AI: Do you need the address?" in transcript
+    assert "Callee: Please text me the address. Speech confidence: 0.88." in transcript
 
 
 @pytest.mark.asyncio
@@ -86,6 +132,7 @@ async def test_direct_phone_number_task_tracks_general_answers():
         "+14165550103",
     ]
     assert [target.name for target in preview.businesses] == ["Contact 1", "Contact 2", "Contact 3"]
+    assert "dinner tonight" in preview.editable_questions[0].text
 
     approved = await orchestrator.approve_calls(
         preview.task.id,
@@ -111,6 +158,50 @@ async def test_direct_phone_number_task_tracks_general_answers():
     ]
     assert outcomes == ["accepted", "maybe", "declined"]
     assert follow_up == ["no", "yes", "no"]
+
+
+@pytest.mark.asyncio
+async def test_sequential_direct_call_transcript_keeps_all_answers():
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    store = InMemoryTaskStore()
+    orchestrator = TaskOrchestrator(settings, store)
+    preview = await orchestrator.preview(
+        TaskPreviewRequest(
+            original_request=(
+                "Call +1 416 555 0101. Invite them for dinner tonight and track the answer."
+            ),
+            filters=SearchFilters(max_calls=1),
+        )
+    )
+    call = CallRecord(
+        id=str(uuid4()),
+        task_id=preview.task.id,
+        business_id=preview.businesses[0].id,
+        business_name=preview.businesses[0].name,
+        phone_number=preview.businesses[0].phone,
+        status=CallStatus.COMPLETED,
+        questions=preview.editable_questions,
+        transcript=(
+            "AI: Would you like to join dinner tonight?\n"
+            "Callee: Yes, I can join.\n"
+            "AI: Are you available at the proposed time?\n"
+            "Callee: The proposed time works.\n"
+            "AI: Is there anything else the user should know?\n"
+            "Callee: No follow-up needed."
+        ),
+    )
+    preview.calls = [call]
+    preview.task.status = TaskStatus.CALLING
+    store.save_task(preview)
+
+    finalized = await orchestrator.finalize_if_ready(preview.task.id)
+
+    extraction = finalized.calls[0].extraction_json
+    assert extraction is not None
+    assert extraction.call_outcome == "accepted"
+    assert extraction.follow_up_required == "no"
+    assert "Yes, I can join." in (extraction.answer_summary or "")
+    assert "No follow-up needed." in (extraction.answer_summary or "")
 
 
 @pytest.mark.asyncio
