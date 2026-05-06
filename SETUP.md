@@ -246,7 +246,16 @@ the MVP: free users get `FREE_REQUEST_LIMIT`; admin and paid allowlists are unli
 
 Avoid IP restrictions unless your Vercel plan gives you stable outbound networking. API restriction to Places API is the safer default for this deployment.
 
-### Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
+### Twilio Programmable Voice fallback: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
+
+Twilio has two roles in this app:
+
+1. **Current fallback runtime**: the backend can place scripted calls directly through Twilio Programmable Voice.
+2. **LiveKit PSTN carrier path**: when `VOICE_RUNTIME=livekit`, LiveKit can still use your Twilio phone number through Twilio Elastic SIP Trunking.
+
+Keep the normal Twilio env vars even after you add LiveKit. They let the app fall back to the scripted Twilio flow if LiveKit is not enabled.
+
+#### A. Get the normal Twilio values
 
 1. Create or open a Twilio account.
 2. Buy a voice-capable Twilio number.
@@ -266,6 +275,66 @@ You do not need to create a TwiML App for the current MVP. Twilio trial accounts
 
 Keep `ALLOW_CALL_RECORDING=false` for initial testing. In that mode the Twilio voice webhook asks the approved questions one at a time with speech gathering, captures each spoken answer, and then summarizes the result without enabling call recording. Turn recording on only after call recording consent, retention, and deletion requirements are handled.
 
+#### B. Create a Twilio Elastic SIP Trunk for LiveKit outbound calls
+
+Do this section only when you are ready to use LiveKit for realtime voice calls. For outbound calling, LiveKit sends a SIP call to Twilio; Twilio then sends the call to the public phone network.
+
+In Twilio Console:
+
+1. Open **Elastic SIP Trunking -> Manage -> Trunks**.
+2. Click **Create new trunk**.
+3. Use a clear name, for example:
+
+```text
+voice-concierge-livekit
+```
+
+4. Open the trunk and go to **Termination**.
+5. Create a **Termination SIP URI**. It must end with `.pstn.twilio.com`, for example:
+
+```text
+voice-concierge-livekit.pstn.twilio.com
+```
+
+Copy this value. You will use it as the LiveKit outbound trunk `address`.
+
+6. In Twilio, create a credential list:
+
+```text
+Elastic SIP Trunking -> Manage -> Credential Lists
+```
+
+Use a generated username and password. Example:
+
+```text
+username: livekit_voice_concierge
+password: use-a-long-generated-password
+```
+
+7. Attach the credential list to the trunk:
+
+```text
+Elastic SIP Trunking -> Manage -> Trunks -> your trunk -> Termination -> Authentication -> Credential Lists
+```
+
+8. Save the trunk.
+9. Open the trunk's **Numbers** tab.
+10. Associate your Twilio caller number, for example:
+
+```text
++16473628073
+```
+
+For this app's outbound LiveKit calls, you do not need to configure Twilio **Origination** unless you also want incoming PSTN calls to route into LiveKit. Origination is for inbound calls to your Twilio number.
+
+Important Twilio details:
+
+- Phone numbers must use E.164 format, for example `+16473628073`.
+- Trial Twilio accounts can usually call only verified destination numbers.
+- The SIP URI value used by LiveKit should be the Twilio Termination SIP URI host, for example `voice-concierge-livekit.pstn.twilio.com`.
+- Do not include `sip:` or `;transport=tcp` in the LiveKit outbound trunk `address`.
+- Official references: [Twilio Elastic SIP Trunking](https://www.twilio.com/docs/sip-trunking) and [LiveKit Twilio trunk setup](https://docs.livekit.io/telephony/start/providers/twilio/).
+
 ### LiveKit: realtime voice agent runtime
 
 Use LiveKit when you want natural realtime conversations instead of Twilio's scripted
@@ -282,22 +351,155 @@ Vercel API -> LiveKit room -> LiveKit agent worker -> OpenAI Realtime
            -> LiveKit SIP participant -> Twilio SIP trunk -> recipient phone
 ```
 
-1. Create or open a LiveKit Cloud project.
-2. Copy `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`.
-3. In Twilio, create an Elastic SIP Trunk and associate your Twilio number.
-4. In LiveKit, create an outbound SIP trunk that points to the Twilio trunk.
-5. Copy the LiveKit outbound trunk ID to `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
-6. Set a strong shared secret for worker callbacks:
+#### A. Create or open a LiveKit Cloud project
+
+1. Go to `https://cloud.livekit.io`.
+2. Create a project, or open the project you want to use.
+3. Open the project settings page.
+
+#### B. Get `LIVEKIT_URL`
+
+In the LiveKit Cloud project settings, find the **Project URL** or **WebSocket URL**. It starts with `wss://` and usually looks like:
+
+```text
+wss://your-project-name.livekit.cloud
+```
+
+Add that exact value to Vercel:
+
+```bash
+LIVEKIT_URL=wss://your-project-name.livekit.cloud
+```
+
+Common mistakes:
+
+- Do not use the LiveKit dashboard URL.
+- Do not use `https://...` for this app.
+- Do not remove the `wss://` prefix.
+- Use the URL from the same LiveKit project as your API key and secret.
+
+CLI option after installing the LiveKit CLI:
+
+```bash
+brew install livekit-cli
+lk cloud auth
+lk project list
+```
+
+The linked project details include the LiveKit project URL. Use the `wss://...livekit.cloud` value as `LIVEKIT_URL`.
+
+#### C. Get `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
+
+In LiveKit Cloud:
+
+1. Open your project.
+2. Open **Settings -> API keys** or the project **Keys** page.
+3. Create a new API key for production.
+4. Copy the key and secret.
+5. Add them to Vercel:
+
+```bash
+LIVEKIT_API_KEY=API...
+LIVEKIT_API_SECRET=...
+```
+
+Treat the LiveKit API secret like a password. Do not commit it to Git.
+
+#### D. Create the LiveKit outbound SIP trunk
+
+This step connects LiveKit to the Twilio Elastic SIP Trunk you created above.
+
+In LiveKit Cloud:
+
+1. Open your project.
+2. Go to **Telephony -> SIP trunks**.
+3. Click **Create new trunk**.
+4. Select **Outbound**.
+5. Open the JSON editor.
+6. Paste this JSON and replace the values:
+
+```json
+{
+  "name": "voice-concierge-twilio-outbound",
+  "address": "voice-concierge-livekit.pstn.twilio.com",
+  "numbers": ["+16473628073"],
+  "authUsername": "livekit_voice_concierge",
+  "authPassword": "same-password-from-twilio-credential-list"
+}
+```
+
+Value mapping:
+
+| LiveKit field | Value source |
+| --- | --- |
+| `address` | Twilio trunk **Termination SIP URI**, without `sip:` |
+| `numbers` | Your Twilio caller number in E.164 format |
+| `authUsername` | Username from the Twilio SIP credential list |
+| `authPassword` | Password from the Twilio SIP credential list |
+
+7. Click **Create**.
+8. Copy the returned trunk ID. It usually looks like `ST_...`.
+9. Add it to Vercel:
+
+```bash
+LIVEKIT_SIP_OUTBOUND_TRUNK_ID=ST_...
+```
+
+LiveKit CLI option:
+
+Create `outbound-trunk.json`:
+
+```json
+{
+  "trunk": {
+    "name": "voice-concierge-twilio-outbound",
+    "address": "voice-concierge-livekit.pstn.twilio.com",
+    "numbers": ["+16473628073"],
+    "authUsername": "livekit_voice_concierge",
+    "authPassword": "same-password-from-twilio-credential-list"
+  }
+}
+```
+
+Then run:
+
+```bash
+lk sip outbound create outbound-trunk.json
+```
+
+The command returns:
+
+```text
+SIPTrunkID: ST_...
+```
+
+Use that ID as `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
+
+Official references: [LiveKit outbound SIP trunk](https://docs.livekit.io/telephony/making-calls/outbound-trunk/) and [LiveKit CLI setup](https://docs.livekit.io/reference/developer-tools/livekit-cli/).
+
+#### E. Set a shared webhook secret
+
+The LiveKit worker posts call completion, transcript, and extraction data back to the Vercel API. Use a shared secret so random callers cannot spoof worker callbacks.
+
+Generate one locally:
 
 ```bash
 LIVEKIT_WEBHOOK_SECRET=$(openssl rand -hex 32)
+echo "$LIVEKIT_WEBHOOK_SECRET"
 ```
 
-7. Add these Vercel env vars:
+Add the same value in two places:
+
+1. Vercel env var: `LIVEKIT_WEBHOOK_SECRET`
+2. LiveKit worker secret/env var: `LIVEKIT_WEBHOOK_SECRET`
+
+#### F. Add the LiveKit env vars to Vercel
+
+When the LiveKit project, Twilio SIP trunk, and LiveKit outbound SIP trunk are ready, set:
 
 ```bash
 VOICE_RUNTIME=livekit
-LIVEKIT_URL=wss://...
+LIVEKIT_URL=wss://your-project-name.livekit.cloud
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
 LIVEKIT_SIP_OUTBOUND_TRUNK_ID=ST_...
@@ -307,9 +509,56 @@ LIVEKIT_WAIT_UNTIL_ANSWERED=false
 TWILIO_FROM_NUMBER=+16473628073
 ```
 
-8. Deploy the worker in `workers/livekit_voice_agent` to LiveKit Cloud agent hosting or another
-long-running container host.
-9. Set the same `LIVEKIT_AGENT_NAME` and `LIVEKIT_WEBHOOK_SECRET` on the worker.
+Then redeploy the Vercel app:
+
+```bash
+npx vercel redeploy
+```
+
+Check:
+
+```bash
+curl -sS https://ai-calling-agent-snowy.vercel.app/health
+```
+
+Expected LiveKit-ready values:
+
+```json
+{
+  "voice_runtime": "livekit",
+  "livekit_enabled": true,
+  "livekit_calling_enabled": true
+}
+```
+
+If `livekit_enabled` is `false`, check `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `DEMO_MODE=false`.
+
+If `livekit_calling_enabled` is `false`, check `VOICE_RUNTIME=livekit` and `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
+
+#### G. Deploy the LiveKit worker
+
+The Vercel API creates tasks and dispatches LiveKit calls, but the realtime voice conversation must run in a long-running worker. Do not run the LiveKit worker as a normal Vercel serverless function.
+
+Worker location:
+
+```text
+workers/livekit_voice_agent
+```
+
+Set these worker env vars or secrets:
+
+```bash
+LIVEKIT_URL=wss://your-project-name.livekit.cloud
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+OPENAI_API_KEY=sk-...
+OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview
+AGENT_NAME=voice-concierge-caller
+BACKEND_BASE_URL=https://ai-calling-agent-snowy.vercel.app
+LIVEKIT_WEBHOOK_SECRET=...
+```
+
+`AGENT_NAME` on the worker must match `LIVEKIT_AGENT_NAME` on Vercel. If they do not match, the backend can create a LiveKit room but the correct worker may not pick up the job.
 
 Worker local test:
 
@@ -328,6 +577,32 @@ uv run agent.py start
 If `VOICE_RUNTIME=livekit` but `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` is missing, the backend will not use
 LiveKit and `/health` will show `livekit_calling_enabled: false`. Keep `VOICE_RUNTIME=twilio` until
 the worker and trunk are ready.
+
+#### H. Minimal end-to-end LiveKit test
+
+Start with your own verified phone number and one call.
+
+1. Set `MAX_CALLS_PER_TASK=1`.
+2. Set `ALLOW_CALL_RECORDING=false`.
+3. Set `VOICE_RUNTIME=livekit`.
+4. Confirm `/health` shows `livekit_calling_enabled: true`.
+5. Open the app and submit:
+
+```text
+Call +1 YOUR VERIFIED TEST NUMBER. Say this is an AI assistant calling on behalf of a user and ask whether they are available for a test dinner invitation. Track the answer.
+```
+
+6. Approve the one call.
+7. Confirm the phone rings from your Twilio number.
+8. Confirm the UI moves from calling to completed and shows the transcript/extracted answer.
+
+If the phone does not ring:
+
+- Confirm the LiveKit worker is running.
+- Confirm the Twilio trunk Termination SIP URI matches the LiveKit outbound trunk `address`.
+- Confirm the Twilio credential list username/password match LiveKit `authUsername` and `authPassword`.
+- Confirm the Twilio caller number is associated with the trunk.
+- Confirm the destination number is verified if the Twilio account is still in trial mode.
 
 ## 4. Real Test Checklist
 
