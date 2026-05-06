@@ -2,28 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
-  Building2,
-  CalendarCheck,
+  ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
   ListChecks,
   LogIn,
-  MapPin,
-  Mic2,
   Moon,
   PhoneCall,
   Plus,
   ShieldCheck,
-  Sparkles,
   Sun,
   Target,
-  UserCircle,
-  Users,
-  Workflow
+  UserCircle
 } from "lucide-react";
 
 import { BusinessPreview } from "./components/BusinessPreview";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { LandingPage } from "./components/LandingPage";
 import { ProgressTimeline } from "./components/ProgressTimeline";
 import { RequestComposer } from "./components/RequestComposer";
 import { ResultsView } from "./components/ResultsView";
@@ -38,9 +33,6 @@ const TERMINAL_CALL_STATUSES = new Set(["completed", "failed", "no_answer", "voi
 
 const DEFAULT_REQUEST =
   "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes.";
-
-const DEMO_SCREENSHOT_URL =
-  "https://raw.githubusercontent.com/Abby263/ai-calling-agent/main/docs/assets/ui-results.png";
 
 const initialFilters: SearchFilters = {
   radius_meters: 3000,
@@ -74,11 +66,6 @@ export type AppAuthClient = {
 type ThemeControls = {
   darkMode: boolean;
   onToggleTheme: () => void;
-};
-
-type LandingPageProps = ThemeControls & {
-  onOpenApp: () => void;
-  authClient: AppAuthClient;
 };
 
 type ConsolePageProps = ThemeControls & {
@@ -142,332 +129,155 @@ export default function App({ authClient }: AppProps) {
   );
 }
 
-function ThemeButton({
+function DashboardHeader({
   darkMode,
   onToggleTheme,
-  showLabel = false
-}: ThemeControls & { showLabel?: boolean }) {
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      className={showLabel ? "h-11 px-4" : "h-10 w-10 px-0"}
-      aria-label={darkMode ? "Use light mode" : "Use dark mode"}
-      aria-pressed={darkMode}
-      title={darkMode ? "Use light mode" : "Use dark mode"}
-      onClick={onToggleTheme}
-    >
-      {darkMode ? <Sun size={showLabel ? 18 : 16} /> : <Moon size={showLabel ? 18 : 16} />}
-      {showLabel ? <span>{darkMode ? "Light mode" : "Dark mode"}</span> : null}
-    </Button>
-  );
-}
-
-function ProductHeader({
-  darkMode,
-  onToggleTheme,
-  onOpenApp,
   onGoHome,
   authClient,
-  current
+  task,
+  onNewTask
 }: ThemeControls & {
-  onOpenApp: () => void;
-  onGoHome?: () => void;
+  onGoHome: () => void;
   authClient: AppAuthClient;
-  current: "landing" | "dashboard";
+  task: TaskDetail | null;
+  onNewTask: () => void;
 }) {
-  const navItems = [
-    { label: "Overview", href: "/", action: onGoHome },
-    { label: "Dashboard", href: "/app", action: onOpenApp }
-  ];
-
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/86">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-3 text-left"
-          onClick={onGoHome ?? (() => window.scrollTo({ top: 0, behavior: "smooth" }))}
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-lifted">
-            <PhoneCall size={18} />
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate font-display text-base font-semibold text-slate-950 dark:text-white">
-              Voice Concierge Agent
+    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/85">
+      <div className="mx-auto flex max-w-[88rem] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onGoHome}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
+          >
+            <ArrowLeft size={13} />
+            Home
+          </button>
+          <button
+            type="button"
+            onClick={onGoHome}
+            className="flex items-center gap-2 text-left"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-soft">
+              <PhoneCall size={15} />
             </span>
-            <span className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
-              Approved AI calling workspace
+            <span className="leading-tight">
+              <span className="block font-display text-sm font-semibold text-slate-950 dark:text-white">
+                Voice Concierge
+              </span>
+              <span className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Operations console
+              </span>
             </span>
-          </span>
-        </button>
+          </button>
+          {task ? (
+            <Badge className={`${statusClass(task.task.status)} ml-1 hidden md:inline-flex`}>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping-slow rounded-full bg-current opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+              </span>
+              {task.task.status.replace("_", " ")}
+            </Badge>
+          ) : null}
+        </div>
 
-        <nav className="hidden items-center rounded-xl border border-slate-200 bg-white/70 p-1 shadow-soft dark:border-slate-800 dark:bg-slate-900/60 lg:flex">
-          {navItems.map((item) => {
-            const active =
-              (current === "landing" && item.label === "Overview") ||
-              (current === "dashboard" && item.label === "Dashboard");
-            return (
-              <a
-                key={item.label}
-                href={item.href}
-                onClick={(event) => {
-                  if (item.action) {
-                    event.preventDefault();
-                    item.action();
-                  }
-                }}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  active
-                    ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-                }`}
-              >
-                {item.label}
-              </a>
-            );
-          })}
-        </nav>
-
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Badge className="hidden border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300 lg:inline-flex">
+            <ShieldCheck size={12} />
+            AI disclosure on
+          </Badge>
           {authClient.frontendConfigured && authClient.isSignedIn ? (
-            authClient.accountControl
+            <>
+              <Badge className="hidden border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 sm:inline-flex">
+                <UserCircle size={12} />
+                {authClient.user?.name || authClient.user?.email || "Signed in"}
+              </Badge>
+              {authClient.accountControl}
+            </>
           ) : (
             <Button
               type="button"
               variant="secondary"
-              className="hidden h-10 px-4 sm:inline-flex"
+              className="h-9 px-3"
               onClick={authClient.frontendConfigured ? authClient.signIn : undefined}
               disabled={!authClient.frontendConfigured || !authClient.isLoaded}
             >
-              <LogIn size={16} />
-              Sign in
+              <LogIn size={14} />
+              <span className="hidden sm:inline">Sign in</span>
             </Button>
           )}
-          <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} showLabel />
-        </div>
-      </div>
-      <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6 lg:hidden">
-        {navItems.map((item) => (
-          <a
-            key={item.label}
-            href={item.href}
-            onClick={(event) => {
-              if (item.action) {
-                event.preventDefault();
-                item.action();
-              }
-            }}
-            className="whitespace-nowrap rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200"
+          <button
+            type="button"
+            aria-label={darkMode ? "Use light mode" : "Use dark mode"}
+            title={darkMode ? "Use light mode" : "Use dark mode"}
+            onClick={onToggleTheme}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
           >
-            {item.label}
-          </a>
-        ))}
+            {darkMode ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <Button type="button" className="h-9 px-3" onClick={onNewTask}>
+            <Plus size={14} />
+            <span className="hidden sm:inline">New task</span>
+          </Button>
+        </div>
       </div>
     </header>
   );
 }
 
-function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: LandingPageProps) {
-  const useCases = [
-    {
-      title: "Restaurant discovery",
-      body: "Find nearby options, confirm happy hour, ask dietary questions, and compare confirmed answers.",
-      icon: MapPin
-    },
-    {
-      title: "Direct call lists",
-      body: "Call provided phone numbers, ask a custom question, and track every response in one structured view.",
-      icon: Users
-    },
-    {
-      title: "Appointments",
-      body: "Ask clinics, salons, or service providers about availability, constraints, and next steps.",
-      icon: CalendarCheck
-    },
-    {
-      title: "Business availability",
-      body: "Check product availability, reservation rules, pet policies, event slots, or consultation windows.",
-      icon: Building2
-    }
-  ];
-
-  const flow = [
-    [
-      "1",
-      "Describe the mission",
-      "Example: “Call these numbers, invite them for dinner tonight, and track who says yes.”"
-    ],
-    [
-      "2",
-      "Review the plan",
-      "The app extracts the phone numbers, drafts the dinner invitation question, and asks you to approve the call list."
-    ],
-    [
-      "3",
-      "Calls run transparently",
-      "The AI caller says it is an assistant calling on your behalf, asks the approved question, and records the outcome."
-    ],
-    [
-      "4",
-      "Compare outcomes",
-      "You get a table showing who said yes, who declined, who did not answer, and any notes from the call."
-    ]
-  ];
-
+function StagePill({
+  active,
+  done,
+  disabled,
+  index,
+  label,
+  hint,
+  icon: Icon,
+  onClick
+}: {
+  active: boolean;
+  done: boolean;
+  disabled: boolean;
+  index: number;
+  label: string;
+  hint: string;
+  icon: typeof PhoneCall;
+  onClick: () => void;
+}) {
   return (
-    <main className="min-h-screen text-ink dark:text-slate-100">
-      <ProductHeader
-        darkMode={darkMode}
-        onToggleTheme={onToggleTheme}
-        onOpenApp={onOpenApp}
-        authClient={authClient}
-        current="landing"
-      />
-
-      <section className="relative isolate min-h-[78svh] overflow-hidden border-b border-slate-200/70 dark:border-slate-800/80">
-        <img
-          src={DEMO_SCREENSHOT_URL}
-          alt="Voice Concierge dashboard showing structured call results"
-          className="absolute inset-0 -z-20 h-full w-full object-cover object-top opacity-[0.12] dark:opacity-10 sm:opacity-55 sm:dark:opacity-35"
-        />
-        <div className="absolute inset-0 -z-10 bg-white/90 dark:bg-slate-950/90 sm:bg-white/76 sm:dark:bg-slate-950/78" />
-        <div className="mx-auto grid min-h-[78svh] max-w-7xl content-center gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(22rem,0.75fr)] lg:py-20">
-          <div className="max-w-3xl">
-            <Badge className="border-brand-200 bg-white/90 text-brand-700 shadow-sm dark:border-brand-900/50 dark:bg-slate-950/80 dark:text-brand-300">
-              <Sparkles size={12} />
-              Human-approved outbound AI calls
-            </Badge>
-            <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.05] text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
-              Voice Concierge Agent
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 dark:text-slate-300 sm:text-lg sm:leading-8">
-              Turn a plain-language request into researched call targets, approved AI phone calls, transcripts,
-              extracted answers, and a decision-ready summary.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button type="button" className="px-5" onClick={onOpenApp}>
-                <Mic2 size={16} />
-                Start a request
-              </Button>
-              <a
-                href="#how-it-works"
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:border-slate-600"
-              >
-                <Workflow size={16} />
-                See workflow
-              </a>
-            </div>
-          </div>
-
-          <div className="self-end rounded-2xl border border-slate-200/80 bg-white/92 p-4 shadow-lifted backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/88">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                  Example mission
-                </p>
-                <p className="mt-1 font-display text-xl font-semibold text-slate-950 dark:text-white">
-                  Find dinner options and call to verify vegan meals.
-                </p>
-              </div>
-              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                Live flow
-              </Badge>
-            </div>
-            <div className="mt-4 grid gap-2">
-              {["Search nearby candidates", "Ask approved questions", "Extract answers to JSON", "Recommend best option"].map(
-                (item, index) => (
-                  <div
-                    key={item}
-                    className="grid grid-cols-[2rem_1fr] items-center gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 text-sm text-slate-700 dark:border-slate-800/80 dark:bg-slate-950/50 dark:text-slate-300"
-                  >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 font-semibold text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
-                      {index + 1}
-                    </span>
-                    <span className="font-medium">{item}</span>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="use-cases" className="bg-white/70 py-12 dark:bg-slate-950/40">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="mb-7 max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
-              Use cases
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
-              One concierge flow for calls people do not want to make manually.
-            </h2>
-            <p className="mt-3 text-base leading-7 text-slate-600 dark:text-slate-400">
-              The landing page explains what the product does. The dashboard is where signed-in users create,
-              approve, and monitor real calling tasks.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-4">
-            {useCases.map((item) => {
-              const Icon = item.icon;
-              return (
-                <article
-                  key={item.title}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900/70"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
-                    <Icon size={18} />
-                  </span>
-                  <h2 className="mt-4 font-display text-lg font-semibold text-slate-950 dark:text-white">{item.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.body}</p>
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section id="how-it-works" className="border-y border-slate-200/70 bg-slate-50/80 py-14 dark:border-slate-800/80 dark:bg-slate-950/65">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.75fr_1fr]">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
-              How it works
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
-              Example: invite people for dinner and track every answer.
-            </h2>
-            <p className="mt-4 text-base leading-7 text-slate-600 dark:text-slate-400">
-              A user can write a normal request like “Call the below numbers and invite them for dinner.”
-              The dashboard turns that into an approval queue, runs only the approved calls, and summarizes the
-              responses in one place.
-            </p>
-          </div>
-          <div className="grid gap-3">
-            {flow.map(([step, title, body]) => (
-              <article
-                key={step}
-                className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900/70 sm:grid-cols-[3rem_1fr]"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
-                  {step}
-                </span>
-                <div>
-                  <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">{title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-slate-200/70 bg-white/80 py-8 dark:border-slate-800/80 dark:bg-slate-950/80">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-sm text-slate-500 dark:text-slate-400 sm:px-6">
-          <span>Voice Concierge Agent</span>
-          <span>Disclosed AI calls, user approval, structured outcomes.</span>
-        </div>
-      </footer>
-    </main>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-current={active ? "step" : undefined}
+      className={`group relative flex min-h-14 items-center gap-3 overflow-hidden rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-65 ${
+        active
+          ? "border-transparent bg-brand-gradient text-white shadow-lifted"
+          : done
+            ? "border-brand-200 bg-brand-50 text-brand-800 hover:border-brand-300 dark:border-brand-500/40 dark:bg-brand-500/15 dark:text-brand-100"
+            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-slate-600"
+      }`}
+    >
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${
+          active
+            ? "bg-white/20 text-white"
+            : done
+              ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-100"
+              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        }`}
+      >
+        <Icon size={15} strokeWidth={2.2} />
+      </span>
+      <span className="grid leading-tight">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-80">
+          Step {index + 1}
+        </span>
+        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-[11px] font-medium opacity-75">{hint}</span>
+      </span>
+    </button>
   );
 }
 
@@ -732,145 +542,57 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
     ];
   }, [selectedIds.length, task]);
 
+  const stageTitle = useMemo(() => {
+    switch (stage) {
+      case "request":
+        return { eyebrow: "Step 1 · Intake", title: "Describe the task", subtitle: "Plain-language request — text or voice." };
+      case "preview":
+        return { eyebrow: "Step 2 · Approve", title: "Review the queue", subtitle: "Confirm who gets called and what gets asked." };
+      case "progress":
+        return { eyebrow: "Step 3 · Calls", title: "Calls in progress", subtitle: "Live status, transcripts, and structured extraction." };
+      case "results":
+        return { eyebrow: "Step 4 · Results", title: "Decision-ready summary", subtitle: "Compare outcomes and share the recommendation." };
+    }
+  }, [stage]);
+
   return (
     <main className="relative min-h-screen text-ink dark:text-slate-100">
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 -z-10 bg-grid-light bg-[size:32px_32px] opacity-60 dark:bg-grid-dark"
       />
-      <ProductHeader
+      <DashboardHeader
         darkMode={darkMode}
         onToggleTheme={onToggleTheme}
-        onOpenApp={() => window.history.replaceState({}, "", "/app")}
         onGoHome={onGoHome}
         authClient={authClient}
-        current="dashboard"
+        task={task}
+        onNewTask={startNewTask}
       />
-      <div className="mx-auto max-w-[88rem] px-3 py-4 sm:px-5 sm:py-6">
-        <div className="grid gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
-          <div className="order-1 grid gap-5 lg:order-2">
-            <header className="surface-strong overflow-hidden">
-              <div className="relative">
-                <div
-                  aria-hidden
-                  className="absolute inset-0 bg-brand-gradient-soft"
-                />
-                <div className="relative flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-6">
-                  <div className="flex items-center gap-3.5">
-                    <div className="relative">
-                      <span
-                        aria-hidden
-                        className="absolute -inset-1 rounded-2xl bg-brand-gradient opacity-50 blur-md"
-                      />
-                      <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-gradient text-white shadow-lifted">
-                        <PhoneCall size={20} strokeWidth={2.4} />
-                      </span>
-                    </div>
-                    <div>
-                      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-                        <Sparkles size={11} />
-                        Voice Operations Console
-                      </p>
-                      <h1 className="font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.6rem]">
-                        Voice Concierge <span className="text-gradient">Agent</span>
-                      </h1>
-                      <p className="mt-0.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-                        Natural-language requests become approved outbound calls, transcripts, and structured decisions.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {task ? (
-                      <Badge className={statusClass(task.task.status)}>
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="absolute inline-flex h-full w-full animate-ping-slow rounded-full bg-current opacity-60" />
-                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
-                        </span>
-                        {task.task.status.replace("_", " ")}
-                      </Badge>
-                    ) : null}
-                    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                      <ShieldCheck size={12} />
-                      AI disclosure
-                    </Badge>
-                    {authSession?.auth_required && authClient.isSignedIn ? (
-                      <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                        <UserCircle size={12} />
-                        {authClient.user?.name || authClient.user?.email || "Signed in"}
-                      </Badge>
-                    ) : null}
-                    <Button
-                      type="button"
-                      className="h-10 w-10 px-0 sm:w-auto sm:px-4"
-                      aria-label="Start a new task"
-                      title="Start a new task"
-                      onClick={startNewTask}
-                    >
-                      <Plus size={16} />
-                      <span className="hidden sm:inline">New task</span>
-                    </Button>
-                  </div>
+      <div className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
+          <div className="order-1 grid gap-6 lg:order-2">
+            <section className="surface-strong p-5 sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+                    {stageTitle.eyebrow}
+                  </p>
+                  <h1 className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[1.7rem]">
+                    {stageTitle.title}
+                  </h1>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+                    {stageTitle.subtitle}
+                  </p>
                 </div>
-              </div>
-
-              <div className="divider" />
-
-              <div className="grid gap-4 px-5 py-4 sm:px-6 2xl:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)]">
-                <nav aria-label="Task stages" className="grid gap-2">
-                  <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {stageItems.map((item, index) => {
-                      const Icon = item.icon;
-                      const isActive = stage === item.value;
-                      const isPast = activeStageIndex > index;
-                      const disabled = item.value !== "request" && !task;
-                      return (
-                        <button
-                          key={item.value}
-                          type="button"
-                          onClick={() => {
-                            if (item.value === "request" || task) setStage(item.value);
-                          }}
-                          disabled={disabled}
-                          aria-current={isActive ? "step" : undefined}
-                          className={`group relative flex min-h-14 items-center gap-2.5 overflow-hidden rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-65 ${
-                            isActive
-                              ? "border-transparent bg-brand-gradient text-white shadow-lifted"
-                              : isPast
-                                ? "border-brand-300 bg-brand-50 text-brand-800 hover:border-brand-400 dark:border-brand-500/50 dark:bg-brand-500/15 dark:text-brand-100 dark:hover:border-brand-400"
-                                : "border-slate-200 bg-white/80 text-slate-800 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
-                              isActive
-                                ? "bg-white/20 text-white"
-                                : isPast
-                                  ? "bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-100"
-                                  : "bg-slate-100 text-slate-600 group-hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100"
-                            }`}
-                          >
-                            <Icon size={15} strokeWidth={2.2} />
-                          </span>
-                          <span className="grid leading-tight">
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                              Step {index + 1}
-                            </span>
-                            <span className="text-sm font-semibold">{item.label}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </nav>
-
-                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark sm:grid-cols-4">
+                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark sm:grid-cols-4 sm:min-w-[28rem]">
                   {taskStats.map((stat, index) => (
                     <div
                       key={stat.label}
-                      className={`border-slate-200/70 px-3 py-2.5 dark:border-slate-700/70 ${
-                        index % 2 === 0 ? "border-r sm:border-r" : ""
-                      } ${index < 2 ? "border-b sm:border-b-0" : ""} ${
-                        index < taskStats.length - 1 ? "sm:border-r" : ""
+                      className={`px-3 py-2.5 ${
+                        index < taskStats.length - 1 ? "sm:border-r sm:border-slate-200/70 sm:dark:border-slate-700/70" : ""
+                      } ${index % 2 === 0 ? "border-r border-slate-200/70 dark:border-slate-700/70 sm:border-0" : ""} ${
+                        index < 2 ? "border-b border-slate-200/70 dark:border-slate-700/70 sm:border-0" : ""
                       }`}
                     >
                       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-300">
@@ -884,7 +606,25 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                   ))}
                 </div>
               </div>
-            </header>
+
+              <nav aria-label="Task stages" className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {stageItems.map((item, index) => (
+                  <StagePill
+                    key={item.value}
+                    active={stage === item.value}
+                    done={activeStageIndex > index}
+                    disabled={item.value !== "request" && !task}
+                    index={index}
+                    label={item.label}
+                    hint={item.hint}
+                    icon={item.icon}
+                    onClick={() => {
+                      if (item.value === "request" || task) setStage(item.value);
+                    }}
+                  />
+                ))}
+              </nav>
+            </section>
 
             <div className="animate-fade-in">
               {stage === "request" ? (
