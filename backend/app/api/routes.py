@@ -181,7 +181,12 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
         return Response(content=twiml, media_type="application/xml")
 
     intent = detail.task.parsed_intent_json if detail else None
-    opening = ConversationAgent(settings).opening(call, intent=intent)
+    caller_name = detail.task.caller_display_name if detail else None
+    opening = ConversationAgent(settings).opening(
+        call,
+        intent=intent,
+        caller_display_name=caller_name,
+    )
     call.transcript = _append_turn(call.transcript, "AI", opening.reply)
     store(request).update_call(detail.task.id, call)
 
@@ -259,11 +264,13 @@ async def twilio_speech(
         return _end_call(request, detail, call, reply=CONVO_CLOSING_LINE)
 
     intent = detail.task.parsed_intent_json if detail else None
+    caller_name = detail.task.caller_display_name if detail else None
     turn = await ConversationAgent(settings).respond(
         call=call,
         last_utterance=callee_text or None,
         turn_index=turn_index,
         intent=intent,
+        caller_display_name=caller_name,
     )
 
     call.transcript = _append_turn(call.transcript, "AI", turn.reply)

@@ -49,6 +49,7 @@ export interface TaskPreviewRequest {
   original_request: string;
   location: LocationInput;
   filters: SearchFilters;
+  caller_display_name?: string | null;
 }
 
 export interface Question {
@@ -189,6 +190,7 @@ export interface SearchTask {
   status: TaskStatus;
   created_at: string;
   completed_at?: string | null;
+  caller_display_name?: string | null;
 }
 
 export interface TaskDetail {
@@ -215,6 +217,7 @@ export interface ApproveCallsRequest {
   max_calls: number;
   preferred_call_time?: string | null;
   task_snapshot?: TaskDetail;
+  caller_display_name?: string | null;
 }
 
 export interface AuthUser {

@@ -52,6 +52,10 @@ class TaskPreviewRequest(BaseModel):
     original_request: str = Field(min_length=4, max_length=1000)
     location: LocationInput = Field(default_factory=LocationInput)
     filters: SearchFilters = Field(default_factory=SearchFilters)
+    # Optional first name (or full name) the AI may use when introducing itself,
+    # e.g., "calling on behalf of Vipra". Only used for personal-contact tasks
+    # (direct_calls); generic for business calls.
+    caller_display_name: str | None = Field(default=None, max_length=80)
 
 
 class Question(BaseModel):
@@ -160,6 +164,7 @@ class SearchTask(BaseModel):
     status: TaskStatus = TaskStatus.DRAFT
     created_at: datetime
     completed_at: datetime | None = None
+    caller_display_name: str | None = None
 
 
 class TaskDetail(BaseModel):
@@ -176,6 +181,9 @@ class ApproveCallsRequest(BaseModel):
     max_calls: int = Field(default=5, ge=1, le=5)
     preferred_call_time: str | None = None
     task_snapshot: TaskDetail | None = None
+    # Override the caller name captured at intake (e.g., signed-in user updates
+    # their preferred display name before approving the run).
+    caller_display_name: str | None = Field(default=None, max_length=80)
 
 
 class TaskListItem(BaseModel):
