@@ -115,16 +115,27 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
     transcribe_callback = (
         f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/transcript/{call.id}"
     )
-    recording_attrs = (
-        f' transcribe="true" transcribeCallback="{transcribe_callback}"'
-        if request.app.state.settings.allow_call_recording
-        else ""
+    speech_callback = (
+        f"{request.app.state.settings.public_base_url}/api/webhooks/twilio/speech/{call.id}"
     )
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    if request.app.state.settings.allow_call_recording:
+        record_attrs = (
+            'maxLength="120" playBeep="false" transcribe="true" '
+            f'transcribeCallback="{transcribe_callback}"'
+        )
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice">{_xml_escape(script)}</Say>
   <Pause length="1"/>
-  <Record maxLength="120" playBeep="false"{recording_attrs}/>
+  <Record {record_attrs}/>
+  <Say voice="alice">Thank you. Goodbye.</Say>
+</Response>"""
+    else:
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="{speech_callback}" method="POST" timeout="8" speechTimeout="auto">
+    <Say voice="alice">{_xml_escape(script)}</Say>
+  </Gather>
   <Say voice="alice">Thank you. Goodbye.</Say>
 </Response>"""
     return Response(content=twiml, media_type="application/xml")
@@ -148,8 +159,41 @@ async def twilio_status(
         call.ended_at = utc_now()
     elif not call.started_at:
         call.started_at = utc_now()
-    store(request).update_call(detail.task.id, call)
+    updated = store(request).update_call(detail.task.id, call)
+    if updated and call.status in {
+        CallStatusEnum.COMPLETED,
+        CallStatusEnum.FAILED,
+        CallStatusEnum.NO_ANSWER,
+        CallStatusEnum.VOICEMAIL,
+    }:
+        await orchestrator(request).finalize_if_ready(updated.task.id)
     return {"ok": "true"}
+
+
+@router.post("/webhooks/twilio/speech/{call_id}")
+async def twilio_speech(
+    call_id: str,
+    request: Request,
+    SpeechResult: str | None = Form(default=None),
+    Confidence: str | None = Form(default=None),
+) -> Response:
+    found = store(request).find_call(call_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Call not found")
+    detail, call = found
+    if SpeechResult:
+        call.transcript = _build_speech_transcript(call, SpeechResult, Confidence)
+    call.status = CallStatus.COMPLETED
+    call.ended_at = utc_now()
+    call.extraction_json = await TranscriptExtractionAgent(request.app.state.settings).extract(call)
+    updated = store(request).update_call(detail.task.id, call)
+    if updated:
+        await orchestrator(request).finalize_if_ready(updated.task.id)
+    twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Thank you. That is all I needed. Goodbye.</Say>
+</Response>"""
+    return Response(content=twiml, media_type="application/xml")
 
 
 @router.post("/webhooks/twilio/transcript/{call_id}")
@@ -169,8 +213,8 @@ async def twilio_transcript(
     call.ended_at = datetime.now(UTC)
     call.extraction_json = await TranscriptExtractionAgent(request.app.state.settings).extract(call)
     updated = store(request).update_call(detail.task.id, call)
-    if updated and all(existing.status == CallStatus.COMPLETED for existing in updated.calls):
-        await orchestrator(request).regenerate_summary(updated.task.id)
+    if updated:
+        await orchestrator(request).finalize_if_ready(updated.task.id)
     return {"ok": "true"}
 
 
@@ -181,7 +225,7 @@ def _map_twilio_status(status: str | None, answered_by: str | None) -> CallStatu
     normalized = (status or "").lower()
     if answered_by == "machine":
         return CallStatus.VOICEMAIL
-    if normalized in {"queued", "initiated", "ringing", "in-progress"}:
+    if normalized in {"queued", "initiated", "ringing", "answered", "in-progress"}:
         return CallStatus.CALLING
     if normalized in {"busy", "no-answer", "canceled"}:
         return CallStatus.NO_ANSWER
@@ -190,6 +234,18 @@ def _map_twilio_status(status: str | None, answered_by: str | None) -> CallStatu
     if normalized == "completed":
         return CallStatus.COMPLETED
     return CallStatus.PENDING
+
+
+def _build_speech_transcript(
+    call,
+    speech_result: str,
+    confidence: str | None = None,
+) -> str:
+    suffix = f" (speech confidence {confidence})" if confidence else ""
+    return (
+        f"AI: {build_call_script(call.questions)}\n"
+        f"{call.business_name}: {speech_result.strip()}{suffix}"
+    )
 
 
 def _xml_escape(value: str) -> str:

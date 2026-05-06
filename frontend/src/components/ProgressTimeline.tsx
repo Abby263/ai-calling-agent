@@ -7,25 +7,32 @@ import { Badge, Button } from "./ui";
 export function ProgressTimeline({
   task,
   onCancel,
-  onResults
+  onResults,
+  onFinalize,
+  finalizing = false
 }: {
   task: TaskDetail;
   onCancel: () => void;
   onResults: () => void;
+  onFinalize: () => void;
+  finalizing?: boolean;
 }) {
   const isDirectCallTask = task.task.parsed_intent_json.task_kind === "direct_calls";
   const isAppointmentTask =
     task.task.parsed_intent_json.output_format === "appointment_availability_tracker" ||
     task.task.parsed_intent_json.business_type === "clinic";
+  const terminalStatuses = new Set(["completed", "failed", "no_answer", "voicemail"]);
   const completed = task.calls.filter((call) => call.status === "completed").length;
   const noAnswer = task.calls.filter(
     (call) => call.status === "no_answer" || call.status === "voicemail"
   ).length;
   const inProgress = task.calls.filter(
-    (call) => call.status === "calling" || call.status === "pending"
+    (call) => call.status === "calling" || call.status === "answered" || call.status === "pending"
   ).length;
   const totalCalls = task.calls.length || 1;
-  const progressPct = Math.min(100, Math.round((completed / totalCalls) * 100));
+  const terminal = task.calls.filter((call) => terminalStatuses.has(call.status)).length;
+  const allCallsTerminal = task.calls.length > 0 && terminal === task.calls.length;
+  const progressPct = Math.min(100, Math.round((terminal / totalCalls) * 100));
 
   return (
     <section className="grid gap-5">
@@ -41,10 +48,14 @@ export function ProgressTimeline({
               Live call progress
             </p>
             <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.7rem]">
-              Calling approved {isDirectCallTask ? "contacts" : "businesses"}
+              {allCallsTerminal && !task.summary
+                ? "Preparing results"
+                : `Calling approved ${isDirectCallTask ? "contacts" : "businesses"}`}
             </h1>
             <p className="mt-1.5 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              Streaming status, transcripts, and structured extraction for each approved target.
+              {allCallsTerminal && !task.summary
+                ? "All calls have ended. Building the structured summary from captured answers and call status."
+                : "Streaming status, transcripts, and structured extraction for each approved target."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -53,11 +64,17 @@ export function ProgressTimeline({
                 <CheckCircle2 size={15} />
                 View results
               </Button>
-            ) : null}
-            <Button type="button" variant="danger" onClick={onCancel}>
-              <Ban size={15} />
-              Cancel run
-            </Button>
+            ) : allCallsTerminal ? (
+              <Button type="button" onClick={onFinalize} disabled={finalizing}>
+                <CheckCircle2 size={15} />
+                {finalizing ? "Building results" : "Build results"}
+              </Button>
+            ) : (
+              <Button type="button" variant="danger" onClick={onCancel}>
+                <Ban size={15} />
+                Cancel run
+              </Button>
+            )}
           </div>
         </div>
 
@@ -104,7 +121,7 @@ export function ProgressTimeline({
 
       <div className="grid gap-3">
         {task.calls.map((call, index) => {
-          const isLive = call.status === "calling" || call.status === "pending";
+          const isLive = call.status === "calling" || call.status === "answered" || call.status === "pending";
           return (
             <div
               key={call.id}

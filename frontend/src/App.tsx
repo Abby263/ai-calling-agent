@@ -34,6 +34,8 @@ import type { AuthSession, LocationInput, Question, SearchFilters, TaskDetail, T
 
 type Stage = "request" | "preview" | "progress" | "results";
 
+const TERMINAL_CALL_STATUSES = new Set(["completed", "failed", "no_answer", "voicemail"]);
+
 const DEFAULT_REQUEST =
   "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes.";
 
@@ -482,6 +484,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
   const [questions, setQuestions] = useState<Question[]>([]);
   const [maxCalls, setMaxCalls] = useState(5);
   const [loading, setLoading] = useState(false);
+  const [finalizingResults, setFinalizingResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeId = task?.task.id;
@@ -526,22 +529,32 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
   }, [authLoading, refreshHistory]);
 
   useEffect(() => {
-    if (!task || !["calling", "summarizing"].includes(task.task.status)) {
+    if (!task || !shouldPollTask(task)) {
       return;
     }
     const interval = window.setInterval(async () => {
       try {
         const updated = await api.getTask(task.task.id);
         setTask(updated);
-        if (updated.summary) {
+        if (updated.summary || updated.task.status === "completed") {
           setStage("results");
+          refreshHistory();
+          return;
+        }
+        if (callsAreTerminal(updated)) {
+          const summarized = await api.summarizeTask(updated.task.id);
+          setTask(summarized);
+          if (summarized.summary || summarized.task.status === "completed") {
+            setStage("results");
+            refreshHistory();
+          }
         }
       } catch (err) {
         handleApiFailure(err, "Polling failed.");
       }
     }, 3000);
     return () => window.clearInterval(interval);
-  }, [task]);
+  }, [refreshHistory, task]);
 
   function handleAuthGate(): boolean {
     if (!authSession?.auth_required) return false;
@@ -630,7 +643,10 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       setQuestions(detail.editable_questions);
       setSelectedIds(detail.businesses.filter((business) => business.selected_for_call).map((business) => business.id));
       if (detail.summary) setStage("results");
-      else if (detail.calls.length) setStage("progress");
+      else if (callsAreTerminal(detail)) {
+        setStage("progress");
+        finalizeTask(detail.task.id);
+      } else if (detail.calls.length) setStage("progress");
       else setStage("preview");
     } catch (err) {
       handleApiFailure(err, "Could not open task.");
@@ -648,6 +664,23 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       refreshHistory();
     } catch (err) {
       handleApiFailure(err, "Could not cancel task.");
+    }
+  }
+
+  async function finalizeTask(taskId = task?.task.id) {
+    if (!taskId) return;
+    if (handleAuthGate()) return;
+    setFinalizingResults(true);
+    setError(null);
+    try {
+      const updated = await api.summarizeTask(taskId);
+      setTask(updated);
+      setStage("results");
+      refreshHistory();
+    } catch (err) {
+      handleApiFailure(err, "Could not build results.");
+    } finally {
+      setFinalizingResults(false);
     }
   }
 
@@ -689,7 +722,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
   const taskStats = useMemo(() => {
     const calls = task?.calls ?? [];
     const completed = calls.filter((call) => call.status === "completed").length;
-    const active = calls.filter((call) => call.status === "calling" || call.status === "pending").length;
+    const active = calls.filter((call) => call.status === "calling" || call.status === "answered" || call.status === "pending").length;
     const answered = calls.filter((call) => call.extraction_json?.call_status === "completed").length;
     return [
       { label: "Targets", value: task?.businesses.length ?? 0, icon: <Target size={13} /> },
@@ -782,7 +815,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
 
               <div className="divider" />
 
-              <div className="grid gap-4 px-5 py-4 sm:px-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <div className="grid gap-4 px-5 py-4 sm:px-6 2xl:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)]">
                 <nav aria-label="Task stages" className="grid gap-2">
                   <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {stageItems.map((item, index) => {
@@ -799,12 +832,12 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                           }}
                           disabled={disabled}
                           aria-current={isActive ? "step" : undefined}
-                          className={`group relative flex min-h-14 items-center gap-2.5 overflow-hidden rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          className={`group relative flex min-h-14 items-center gap-2.5 overflow-hidden rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-65 ${
                             isActive
                               ? "border-transparent bg-brand-gradient text-white shadow-lifted"
                               : isPast
-                                ? "border-brand-200 bg-brand-50/60 text-brand-700 hover:border-brand-300 dark:border-brand-800/60 dark:bg-brand-950/30 dark:text-brand-300"
-                                : "border-slate-200 bg-white/70 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-slate-700"
+                                ? "border-brand-300 bg-brand-50 text-brand-800 hover:border-brand-400 dark:border-brand-500/50 dark:bg-brand-500/15 dark:text-brand-100 dark:hover:border-brand-400"
+                                : "border-slate-200 bg-white/80 text-slate-800 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                           }`}
                         >
                           <span
@@ -812,8 +845,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                               isActive
                                 ? "bg-white/20 text-white"
                                 : isPast
-                                  ? "bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300"
-                                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                                  ? "bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-100"
+                                  : "bg-slate-100 text-slate-600 group-hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100"
                             }`}
                           >
                             <Icon size={15} strokeWidth={2.2} />
@@ -830,17 +863,17 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                   </div>
                 </nav>
 
-                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/80 dark:bg-panel-gradient-dark sm:grid-cols-4">
+                <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark sm:grid-cols-4">
                   {taskStats.map((stat, index) => (
                     <div
                       key={stat.label}
-                      className={`border-slate-200/70 px-3 py-2.5 dark:border-slate-800/70 ${
+                      className={`border-slate-200/70 px-3 py-2.5 dark:border-slate-700/70 ${
                         index % 2 === 0 ? "border-r sm:border-r" : ""
                       } ${index < 2 ? "border-b sm:border-b-0" : ""} ${
                         index < taskStats.length - 1 ? "sm:border-r" : ""
                       }`}
                     >
-                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-300">
                         <span className="text-brand-600 dark:text-brand-400">{stat.icon}</span>
                         {stat.label}
                       </p>
@@ -891,7 +924,13 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
               ) : null}
 
               {stage === "progress" && task ? (
-                <ProgressTimeline task={task} onCancel={cancelTask} onResults={() => setStage("results")} />
+                <ProgressTimeline
+                  task={task}
+                  onCancel={cancelTask}
+                  onResults={() => setStage("results")}
+                  onFinalize={() => finalizeTask()}
+                  finalizing={finalizingResults}
+                />
               ) : null}
 
               {stage === "results" && task ? <ResultsView task={task} /> : null}
@@ -903,6 +942,17 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
       </div>
     </main>
   );
+}
+
+function callsAreTerminal(task: TaskDetail): boolean {
+  return task.calls.length > 0 && task.calls.every((call) => TERMINAL_CALL_STATUSES.has(call.status));
+}
+
+function shouldPollTask(task: TaskDetail): boolean {
+  if (["calling", "summarizing"].includes(task.task.status)) {
+    return true;
+  }
+  return callsAreTerminal(task) && !task.summary;
 }
 
 function authSessionErrorMessage(session: AuthSession): string {

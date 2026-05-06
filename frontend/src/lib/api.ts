@@ -68,6 +68,9 @@ export const api = {
   getTask(taskId: string) {
     return request<TaskDetail>(`/api/tasks/${taskId}`);
   },
+  summarizeTask(taskId: string) {
+    return request<TaskDetail>(`/api/tasks/${taskId}/summarize`, { method: "POST" });
+  },
   listTasks() {
     return request<TaskListItem[]>("/api/tasks");
   },

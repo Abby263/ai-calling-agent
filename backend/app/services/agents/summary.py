@@ -8,7 +8,6 @@ from app.core.config import Settings
 from app.db.store import utc_now
 from app.schemas import BusinessCandidate, CallRecord, CallStatus, SummaryRecord, TaskDetail
 
-
 SYSTEM_PROMPT = """You are SummaryAgent for a voice concierge app.
 Create a concise user-facing summary. The task may be a direct call tracker or a nearby business
 comparison. Mention how many targets were found, how many were called, who answered, the key answer
@@ -75,7 +74,9 @@ class SummaryAgent:
         best_vegan = self._best_vegan(answered)
         closest = min(
             detail.businesses,
-            key=lambda business: business.distance_meters if business.distance_meters is not None else 10**9,
+            key=lambda business: (
+                business.distance_meters if business.distance_meters is not None else 10**9
+            ),
             default=None,
         )
 
@@ -155,22 +156,30 @@ class SummaryAgent:
             (
                 call
                 for call in available
-                if call.extraction_json and call.extraction_json.key_details.get("correct_location") == "yes"
+                if call.extraction_json
+                and call.extraction_json.key_details.get("correct_location") == "yes"
             ),
             available[0] if available else None,
         )
 
         if best and best.extraction_json:
+            option_word = "clinic option" if len(detail.calls) == 1 else "clinic options"
             final_summary = (
-                f"I called {len(detail.calls)} clinic option{'s' if len(detail.calls) != 1 else ''}. "
+                f"I called {len(detail.calls)} {option_word}. "
                 f"Best option is {best.business_name}"
             )
             if best.extraction_json.appointment_time:
-                final_summary += f" with availability around {best.extraction_json.appointment_time}"
-            final_summary += ". The user should complete booking directly and avoid sharing medical details through the assistant."
+                final_summary += (
+                    f" with availability around {best.extraction_json.appointment_time}"
+                )
+            final_summary += (
+                ". The user should complete booking directly and avoid sharing medical "
+                "details through the assistant."
+            )
         else:
+            option_word = "clinic option" if len(detail.calls) == 1 else "clinic options"
             final_summary = (
-                f"I called {len(detail.calls)} clinic option{'s' if len(detail.calls) != 1 else ''}. "
+                f"I called {len(detail.calls)} {option_word}. "
                 "No confirmed appointment slot was captured yet."
             )
 
@@ -245,6 +254,11 @@ class SummaryAgent:
             for call in answered
             if call.extraction_json and call.extraction_json.call_outcome == "maybe"
         ]
+        unknown_answered = [
+            call.business_name
+            for call in answered
+            if call.extraction_json and call.extraction_json.call_outcome == "unknown"
+        ]
         not_answered = [
             call.business_name
             for call in detail.calls
@@ -257,11 +271,14 @@ class SummaryAgent:
             f"{len(maybe)} need follow-up",
             f"{len(declined)} declined",
         ]
+        if unknown_answered:
+            parts.append(f"{len(unknown_answered)} answered but needs review")
         if not_answered:
             parts.append(f"{len(not_answered)} did not answer")
         final_summary = " ".join(parts) + "."
-        if maybe:
-            final_summary += f" Follow up with {', '.join(maybe)} to confirm details."
+        follow_up_targets = [*maybe, *unknown_answered]
+        if follow_up_targets:
+            final_summary += f" Follow up with {', '.join(follow_up_targets)} to confirm details."
 
         recommendation_json = {
             "task_kind": "direct_calls",
@@ -273,7 +290,11 @@ class SummaryAgent:
             "uncertainty": [
                 call.business_name
                 for call in answered
-                if call.extraction_json and call.extraction_json.confidence_score < 0.7
+                if call.extraction_json
+                and (
+                    call.extraction_json.confidence_score < 0.7
+                    or call.extraction_json.call_outcome == "unknown"
+                )
             ],
             "results": [
                 {
@@ -281,8 +302,12 @@ class SummaryAgent:
                     "restaurant": call.business_name,
                     "phone_number": call.phone_number,
                     "call_status": call.status,
-                    "outcome": call.extraction_json.call_outcome if call.extraction_json else "unknown",
-                    "answer_summary": call.extraction_json.answer_summary if call.extraction_json else None,
+                    "outcome": (
+                        call.extraction_json.call_outcome if call.extraction_json else "unknown"
+                    ),
+                    "answer_summary": (
+                        call.extraction_json.answer_summary if call.extraction_json else None
+                    ),
                     "follow_up_required": call.extraction_json.follow_up_required
                     if call.extraction_json
                     else "unknown",

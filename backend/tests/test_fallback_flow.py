@@ -1,8 +1,17 @@
+from uuid import uuid4
+
 import pytest
 
 from app.core.config import Settings
 from app.db.store import InMemoryTaskStore
-from app.schemas import ApproveCallsRequest, SearchFilters, TaskPreviewRequest
+from app.schemas import (
+    ApproveCallsRequest,
+    CallRecord,
+    CallStatus,
+    SearchFilters,
+    TaskPreviewRequest,
+    TaskStatus,
+)
 from app.services.orchestrator import TaskOrchestrator
 
 
@@ -166,3 +175,38 @@ async def test_approval_can_use_task_snapshot_for_serverless_demo_invocation():
 
     assert approved.task.status == "completed"
     assert approved.summary is not None
+
+
+@pytest.mark.asyncio
+async def test_terminal_call_without_transcript_finalizes_with_uncertainty():
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    store = InMemoryTaskStore()
+    orchestrator = TaskOrchestrator(settings, store)
+    preview = await orchestrator.preview(
+        TaskPreviewRequest(
+            original_request=(
+                "Call +1 416 555 0101. Invite them for dinner tonight and track the answer."
+            ),
+            filters=SearchFilters(max_calls=1),
+        )
+    )
+    call = CallRecord(
+        id=str(uuid4()),
+        task_id=preview.task.id,
+        business_id=preview.businesses[0].id,
+        business_name=preview.businesses[0].name,
+        phone_number=preview.businesses[0].phone,
+        status=CallStatus.COMPLETED,
+        questions=preview.editable_questions,
+    )
+    preview.calls = [call]
+    preview.task.status = TaskStatus.CALLING
+    store.save_task(preview)
+
+    finalized = await orchestrator.finalize_if_ready(preview.task.id)
+
+    assert finalized.task.status == TaskStatus.COMPLETED
+    assert finalized.summary is not None
+    assert finalized.calls[0].extraction_json is not None
+    assert finalized.calls[0].extraction_json.call_outcome == "unknown"
+    assert finalized.summary.recommendation_json["uncertainty"] == ["Contact 1"]

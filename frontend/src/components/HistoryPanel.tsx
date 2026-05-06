@@ -33,11 +33,11 @@ export function HistoryPanel({
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-800/70 dark:bg-panel-gradient-dark">
-          <div className="border-r border-slate-200/70 p-3 dark:border-slate-800/70">
+        <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/70 bg-panel-gradient dark:border-slate-700/80 dark:bg-panel-gradient-dark">
+          <div className="border-r border-slate-200/70 p-3 dark:border-slate-700/70">
             <div className="flex items-center gap-1.5">
               <Clock3 size={13} className="text-brand-600 dark:text-brand-400" />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                 Tasks
               </p>
             </div>
@@ -48,7 +48,7 @@ export function HistoryPanel({
           <div className="p-3">
             <div className="flex items-center gap-1.5">
               <PhoneCall size={13} className="text-brand-600 dark:text-brand-400" />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                 Calls
               </p>
             </div>
@@ -77,8 +77,8 @@ export function HistoryPanel({
                 key={task.id}
                 className={`group relative grid gap-2 rounded-xl border p-3 transition ${
                   isActive
-                    ? "border-brand-300 bg-brand-50/70 shadow-soft dark:border-brand-700/50 dark:bg-brand-950/30"
-                    : "border-slate-200 bg-white/70 hover:border-slate-300 hover:bg-white dark:border-slate-800/80 dark:bg-slate-950/40 dark:hover:border-slate-700 dark:hover:bg-slate-900/60"
+                    ? "border-brand-300 bg-brand-50/80 shadow-soft dark:border-brand-500/60 dark:bg-brand-500/15"
+                    : "border-slate-200 bg-white/80 hover:border-slate-300 hover:bg-white dark:border-slate-700/80 dark:bg-slate-900/70 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                 }`}
               >
                 {isActive ? (
@@ -102,7 +102,7 @@ export function HistoryPanel({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-8 w-8 px-0 opacity-0 transition group-hover:opacity-100"
+                    className="h-8 w-8 px-0 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"
                     aria-label="Delete task history"
                     title="Delete task history"
                     onClick={() => onDelete(task.id)}

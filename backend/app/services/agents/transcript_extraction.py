@@ -7,7 +7,6 @@ from typing import Any
 from app.core.config import Settings
 from app.schemas import CallExtraction, CallRecord, CallStatus
 
-
 SYSTEM_PROMPT = """You are TranscriptExtractionAgent.
 Convert a phone transcript into the requested JSON schema. The call may be a restaurant/business
 availability call or a direct call to a user-provided contact. Use unknown when the transcript does
@@ -70,13 +69,17 @@ class TranscriptExtractionAgent:
             return self._fallback_appointment_extract(call)
 
         happy = "unknown"
-        if "happy hour" in transcript and any(word in transcript for word in ["yes", "runs", "from"]):
+        if "happy hour" in transcript and any(
+            word in transcript for word in ["yes", "runs", "from"]
+        ):
             happy = "yes"
         if "no happy hour" in transcript:
             happy = "no"
 
         vegan = "unknown"
-        if "vegan" in transcript and any(word in transcript for word in ["yes", "available", "dedicated"]):
+        if "vegan" in transcript and any(
+            word in transcript for word in ["yes", "available", "dedicated"]
+        ):
             vegan = "yes"
         if "no vegan" in transcript:
             vegan = "no"
@@ -99,7 +102,9 @@ class TranscriptExtractionAgent:
             phone_number=call.phone_number,
             call_status=call.status,
             call_outcome="not_applicable",
-            answer_summary=self._sentence_after_speaker(call.transcript) or "Restaurant details captured.",
+            answer_summary=(
+                self._sentence_after_speaker(call.transcript) or "Restaurant details captured."
+            ),
             key_details={},
             follow_up_required=reservation,
             appointment_available="unknown",
@@ -113,14 +118,45 @@ class TranscriptExtractionAgent:
             vegan_options_details=self._sentence_with(call.transcript, ["vegan"]),
             reservation_required=reservation,
             confidence_score=confidence,
-            notes="Extracted from call transcript." if call.transcript else "No transcript available.",
+            notes=(
+                "Extracted from call transcript."
+                if call.transcript
+                else "No transcript available."
+            ),
             recommended_for_user=happy == "yes" and vegan == "yes",
         )
 
     def _fallback_direct_call_extract(self, call: CallRecord) -> CallExtraction:
         transcript = (call.transcript or "").lower()
+        if not transcript:
+            if call.status == CallStatus.NO_ANSWER:
+                return self._terminal_direct_call_extract(
+                    call,
+                    "no_answer",
+                    "No one answered the call.",
+                )
+            if call.status == CallStatus.VOICEMAIL:
+                return self._terminal_direct_call_extract(
+                    call,
+                    "voicemail",
+                    "The call reached voicemail.",
+                )
+            if call.status == CallStatus.FAILED:
+                return self._terminal_direct_call_extract(
+                    call,
+                    "unknown",
+                    "The call failed before an answer was captured.",
+                )
+            return self._terminal_direct_call_extract(
+                call,
+                "unknown",
+                "The call completed, but no speech transcript was captured.",
+            )
         outcome = "unknown"
-        if any(phrase in transcript for phrase in ["would like to join", "yes", "works for me", "available"]):
+        if any(
+            phrase in transcript
+            for phrase in ["would like to join", "yes", "works for me", "available"]
+        ):
             outcome = "accepted"
         if any(phrase in transcript for phrase in ["not sure", "maybe", "can confirm", "text me"]):
             outcome = "maybe"
@@ -128,7 +164,10 @@ class TranscriptExtractionAgent:
             outcome = "declined"
 
         follow_up = "unknown"
-        if any(phrase in transcript for phrase in ["follow up", "text me", "send the final details", "time changes"]):
+        if any(
+            phrase in transcript
+            for phrase in ["follow up", "text me", "send the final details", "time changes"]
+        ):
             follow_up = "yes"
         if any(
             phrase in transcript
@@ -163,10 +202,39 @@ class TranscriptExtractionAgent:
             recommended_for_user=outcome == "accepted",
         )
 
+    def _terminal_direct_call_extract(
+        self,
+        call: CallRecord,
+        outcome: str,
+        message: str,
+    ) -> CallExtraction:
+        return CallExtraction(
+            restaurant_name=call.business_name,
+            contact_name=call.business_name,
+            phone_number=call.phone_number,
+            call_status=call.status,
+            call_outcome=outcome,
+            answer_summary=message,
+            key_details={
+                "response": outcome,
+                "requires_user_follow_up": "yes" if outcome == "unknown" else "no",
+            },
+            follow_up_required="yes" if outcome == "unknown" else "no",
+            appointment_available="unknown",
+            appointment_time=None,
+            appointment_details=None,
+            booking_requirements=None,
+            confidence_score=0.35 if outcome == "unknown" else 0.7,
+            notes=message,
+            recommended_for_user=False,
+        )
+
     def _fallback_appointment_extract(self, call: CallRecord) -> CallExtraction:
         transcript = (call.transcript or "").lower()
         available = "unknown"
-        if any(phrase in transcript for phrase in ["available", "availability", "appointment here is"]):
+        if any(
+            phrase in transcript for phrase in ["available", "availability", "appointment here is"]
+        ):
             available = "yes"
         if any(phrase in transcript for phrase in ["no appointments", "not accepting"]):
             available = "no"
@@ -176,7 +244,12 @@ class TranscriptExtractionAgent:
             follow_up = "no"
 
         time_match = re.search(
-            r"((?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)?\s*(?:at\s*)?\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)|friday morning|next week|thursday at \d{1,2}\s*pm)",
+            (
+                r"((?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|"
+                r"saturday|sunday)?\s*(?:at\s*)?\d{1,2}(?::\d{2})?\s*"
+                r"(?:am|pm|a\.m\.|p\.m\.)|friday morning|next week|"
+                r"thursday at \d{1,2}\s*pm)"
+            ),
             call.transcript or "",
             flags=re.IGNORECASE,
         )
@@ -253,6 +326,9 @@ class TranscriptExtractionAgent:
     def _looks_like_clinic_call(self, call: CallRecord) -> bool:
         name = call.business_name.lower()
         questions = " ".join(question.text for question in call.questions).lower()
-        return any(word in name for word in ["clinic", "medical", "doctor", "practice", "appletree"]) or any(
-            word in questions for word in ["doctor", "appointment", "clinic", "health card"]
+        return any(
+            word in name for word in ["clinic", "medical", "doctor", "practice", "appletree"]
+        ) or any(
+            word in questions
+            for word in ["doctor", "appointment", "clinic", "health card"]
         )

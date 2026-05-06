@@ -39,13 +39,13 @@ export function callStatusLabel(status: CallStatus): string {
 
 export function statusClass(value: string): string {
   if (["completed", "yes", "accepted"].includes(value)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100";
   }
-  if (["calling", "pending", "unknown", "summarizing", "maybe"].includes(value)) {
-    return "border-amber-200 bg-amber-50 text-amber-800";
+  if (["calling", "answered", "pending", "unknown", "summarizing", "maybe"].includes(value)) {
+    return "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-100";
   }
   if (["failed", "no", "no_answer", "voicemail", "cancelled", "declined"].includes(value)) {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-400/60 dark:bg-rose-500/15 dark:text-rose-100";
   }
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-500/60 dark:bg-slate-700/40 dark:text-slate-100";
 }
