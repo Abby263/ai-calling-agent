@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  UI["Web / Mobile UI"] --> Auth["Sign in with Vercel"]
+  UI["Web / Mobile UI"] --> Auth["Clerk session token"]
   UI --> API["FastAPI API"]
   Auth --> API
   API --> Parser["RequestParserAgent"]
@@ -66,7 +66,7 @@ The included PostgreSQL schema implements:
 - `summaries`
 - `consent_disclosure_logs`
 
-The API uses an in-memory store in demo mode and a Neon/PostgreSQL store when `DEMO_MODE=false` and `DATABASE_URL` is present. When `AUTH_REQUIRED=true`, task rows are scoped to the authenticated local user record created from the Vercel OAuth subject.
+The API uses an in-memory store in demo mode and a Neon/PostgreSQL store when `DEMO_MODE=false` and `DATABASE_URL` is present. When `AUTH_REQUIRED=true`, task rows are scoped to the authenticated local user record created from the Clerk user subject.
 
 ## Mobile Architecture
 

@@ -9,6 +9,10 @@ import type {
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? "" : "http://localhost:8000");
 
+type AuthTokenProvider = () => Promise<string | null>;
+
+let authTokenProvider: AuthTokenProvider | null = null;
+
 export class ApiError extends Error {
   status: number;
 
@@ -19,11 +23,16 @@ export class ApiError extends Error {
   }
 }
 
+export function setAuthTokenProvider(provider: AuthTokenProvider | null) {
+  authTokenProvider = provider;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = authTokenProvider ? await authTokenProvider() : null;
   const response = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {})
     },
     ...init
@@ -43,13 +52,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getAuthSession() {
     return request<AuthSession>("/api/auth/session");
-  },
-  login() {
-    const next = encodeURIComponent(window.location.pathname || "/app");
-    window.location.href = `${API_BASE}/api/auth/login?next=${next}`;
-  },
-  logout() {
-    return request<void>("/api/auth/logout", { method: "POST" });
   },
   previewTask(payload: TaskPreviewRequest) {
     return request<TaskDetail>("/api/tasks/preview", {

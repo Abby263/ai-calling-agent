@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
 
 from app.db.store import utc_now
 from app.schemas import (
@@ -14,7 +13,7 @@ from app.schemas import (
     TaskPreviewRequest,
 )
 from app.services.agents.transcript_extraction import TranscriptExtractionAgent
-from app.services.auth import AuthenticatedUser, VercelOAuthService
+from app.services.auth import AuthenticatedUser, ClerkAuthService
 from app.services.compliance import build_call_script
 
 router = APIRouter(prefix="/api")
@@ -28,8 +27,8 @@ def store(request: Request):
     return request.app.state.store
 
 
-def auth(request: Request) -> VercelOAuthService:
-    return VercelOAuthService(request.app.state.settings)
+def auth(request: Request) -> ClerkAuthService:
+    return ClerkAuthService(request.app.state.settings)
 
 
 def task_user(request: Request) -> AuthenticatedUser | None:
@@ -39,21 +38,6 @@ def task_user(request: Request) -> AuthenticatedUser | None:
 @router.get("/auth/session")
 async def auth_session(request: Request) -> dict[str, object]:
     return auth(request).session_payload(request)
-
-
-@router.get("/auth/login")
-async def auth_login(request: Request) -> RedirectResponse:
-    return auth(request).begin_login(request)
-
-
-@router.get("/auth/callback")
-async def auth_callback(request: Request) -> RedirectResponse:
-    return await auth(request).finish_login(request)
-
-
-@router.post("/auth/logout", status_code=204)
-async def auth_logout(request: Request) -> Response:
-    return auth(request).logout()
 
 
 @router.post("/tasks/preview", response_model=TaskDetail)

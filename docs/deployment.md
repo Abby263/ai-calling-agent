@@ -3,7 +3,7 @@
 ## Phase 1 Production Hardening
 
 1. Use Neon Postgres in production by setting `DEMO_MODE=false` and `DATABASE_URL`.
-2. Enable `AUTH_REQUIRED=true` with Sign in with Vercel credentials for paid task APIs.
+2. Enable `AUTH_REQUIRED=true` with Clerk credentials for paid task APIs.
 3. Encrypt or redact transcripts at rest.
 4. Add background orchestration with Redis plus Celery, BullMQ, or Temporal.
 5. Add provider retry policies and idempotency keys for call creation.
@@ -53,9 +53,9 @@ When the project is connected to GitHub through Vercel Git integration, every me
 Required production env vars include provider credentials plus:
 
 - `AUTH_REQUIRED=true`
-- `AUTH_SESSION_SECRET`
-- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
-- `VERCEL_APP_CLIENT_SECRET`
+- `CLERK_SECRET_KEY`
+- `VITE_CLERK_PUBLISHABLE_KEY`
+- `CLERK_AUTHORIZED_PARTIES`
 
 The public website remains browsable without login. Task creation, task history, transcripts, approval, cancel, and delete APIs require a signed-in session when auth is enabled.
 

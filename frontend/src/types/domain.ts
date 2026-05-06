@@ -225,6 +225,7 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
+  provider: "clerk";
   auth_required: boolean;
   auth_configured: boolean;
   authenticated: boolean;
