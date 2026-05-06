@@ -1,8 +1,10 @@
-import { CheckCircle2, Download, FileText, Mail, Printer, Sparkles, Table2 } from "lucide-react";
+import { CheckCircle2, Download, FileText, Loader2, Mail, MessageCircle, Printer, Sparkles, Table2 } from "lucide-react";
 
 import { metersToDistance, outcomeLabel, statusClass, triStateLabel } from "../lib/format";
 import type { TaskDetail } from "../types/domain";
 import { Badge, Button } from "./ui";
+import { CallDecisionPanel } from "./CallDecisionPanel";
+import { CallTranscript } from "./CallTranscript";
 
 export function ResultsView({ task }: { task: TaskDetail }) {
   const results = task.summary?.recommendation_json.results ?? [];
@@ -94,9 +96,22 @@ export function ResultsView({ task }: { task: TaskDetail }) {
       </div>
 
       <div className="surface-strong p-5 sm:p-6">
-        <p className="max-w-4xl text-base leading-7 text-slate-800 dark:text-slate-200">
-          {task.summary?.final_summary ?? "Summary is not available yet."}
-        </p>
+        {task.summary ? (
+          <p className="max-w-4xl text-base leading-7 text-slate-800 dark:text-slate-200">
+            {task.summary.final_summary}
+          </p>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100">
+            <Loader2 size={16} className="animate-spin shrink-0" />
+            <div>
+              <p className="font-semibold">Building the final summary…</p>
+              <p className="text-xs leading-5 opacity-80">
+                The calls have wrapped up. The decision summary should appear in a few seconds —
+                if it doesn't, hit "View results" again to retry.
+              </p>
+            </div>
+          </div>
+        )}
         {isDirectCallTask ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Recommendation label="Accepted" value={(task.summary?.recommendation_json.accepted ?? []).join(", ")} accent="emerald" />
@@ -274,19 +289,29 @@ export function ResultsView({ task }: { task: TaskDetail }) {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         {task.calls.map((call) => (
-          <article key={call.id} className="surface-strong p-4">
+          <article key={call.id} className="surface-strong grid gap-4 p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display font-semibold tracking-tight text-slate-900 dark:text-white">
+              <h2 className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
                 {call.business_name}
               </h2>
               <Badge className={statusClass(call.status)}>{call.status.replace("_", " ")}</Badge>
             </div>
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200/70 bg-slate-950 dark:border-slate-800/70">
-              <pre className="max-h-52 whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-slate-100 scrollbar-thin">
-                {call.transcript ?? "Transcript not available."}
-              </pre>
+            <CallDecisionPanel
+              call={call}
+              isDirectCallTask={isDirectCallTask}
+              isAppointmentTask={isAppointmentTask}
+            />
+            <div>
+              <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                <MessageCircle size={12} />
+                Conversation
+              </p>
+              <CallTranscript
+                transcript={call.transcript}
+                calleeLabel={call.business_name}
+              />
             </div>
           </article>
         ))}

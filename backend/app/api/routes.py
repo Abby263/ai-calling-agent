@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
@@ -261,7 +260,7 @@ async def twilio_speech(
     over_turns = turn_index > MAX_TURNS
 
     if over_time or over_turns:
-        return _end_call(request, detail, call, reply=CONVO_CLOSING_LINE)
+        return await _end_call(request, detail, call, reply=CONVO_CLOSING_LINE)
 
     intent = detail.task.parsed_intent_json if detail else None
     caller_name = detail.task.caller_display_name if detail else None
@@ -278,7 +277,7 @@ async def twilio_speech(
     store(request).update_call(detail.task.id, call)
 
     if turn.should_end:
-        return _end_call(request, detail, call, reply=turn.reply, already_appended=True)
+        return await _end_call(request, detail, call, reply=turn.reply, already_appended=True)
 
     next_url = (
         f"{settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/{turn_index + 1}"
@@ -413,8 +412,16 @@ def _elapsed_seconds(call) -> float:
     return max(delta.total_seconds(), 0.0)
 
 
-def _end_call(request, detail, call, *, reply: str, already_appended: bool = False) -> Response:
-    """Speak the closing reply, hang up, and finalize the call in the background."""
+async def _end_call(request, detail, call, *, reply: str, already_appended: bool = False) -> Response:
+    """Speak the closing reply, hang up, and finalize the call before returning.
+
+    NOTE: finalization (extraction + summary) runs synchronously here. The earlier
+    fire-and-forget `asyncio.create_task` was unreliable on Vercel serverless —
+    the lambda is killed once the response returns, so the background extraction
+    silently dropped, leaving the UI without a decision or summary. Doing it
+    inline costs Twilio an extra second on the closing turn but guarantees the
+    decision is in the store by the time the user polls.
+    """
     if not already_appended:
         call.transcript = _append_turn(call.transcript, "AI", reply)
     call.status = CallStatus.COMPLETED
@@ -429,41 +436,40 @@ def _end_call(request, detail, call, *, reply: str, already_appended: bool = Fal
         "</Response>"
     )
 
-    asyncio.create_task(
-        _finalize_call_async(
-            request.app.state.settings,
-            request.app.state.store,
-            request.app.state.orchestrator,
-            detail.task.id,
-            call.id,
-        )
-    )
+    try:
+        if call.extraction_json is None:
+            call.extraction_json = await TranscriptExtractionAgent(
+                request.app.state.settings
+            ).extract(call)
+            store(request).update_call(detail.task.id, call)
+        await orchestrator(request).finalize_if_ready(detail.task.id)
+    except Exception:
+        # Don't let a finalize failure break the hangup TwiML — the Twilio status
+        # callback (`/webhooks/twilio/status`) will retry finalize when the call
+        # is reported as completed.
+        pass
     return Response(content=twiml, media_type="application/xml")
-
-
-async def _finalize_call_async(settings, store_obj, orchestrator_obj, task_id: str, call_id: str) -> None:
-    found = store_obj.find_call(call_id)
-    if not found:
-        return
-    detail, call = found
-    if call.extraction_json is None:
-        call.extraction_json = await TranscriptExtractionAgent(settings).extract(call)
-    store_obj.update_call(detail.task.id, call)
-    await orchestrator_obj.finalize_if_ready(detail.task.id)
 
 
 def _speech_gather_twiml(*, action_url: str, prompt: str) -> str:
     """TwiML that speaks the prompt and gathers a natural speech response.
 
-    `speechTimeout="auto"` lets Twilio detect end-of-utterance (good for
-    conversation), and we use the conversation-tuned model for better recognition.
+    Tuned for snappier turns:
+      - `timeout=4`: shorter window before we treat silence as the callee not
+        responding (was 6s — felt sluggish).
+      - `speechTimeout="auto"`: Twilio still detects end-of-utterance properly.
+      - `speechModel="phone_call"`: the conversation-tuned model isn't always
+        available on every account; `phone_call` is a reliable fast default.
+      - `actionOnEmptyResult="true"`: hand control back to the next webhook even
+        if the callee was silent, so the agent can prompt again instead of the
+        line dying.
     """
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<Response>\n"
         f'  <Gather input="speech" action="{action_url}" method="POST" '
-        'timeout="6" speechTimeout="auto" '
-        'speechModel="experimental_conversations" '
+        'timeout="4" speechTimeout="auto" '
+        'speechModel="phone_call" '
         'actionOnEmptyResult="true">\n'
         f"    <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(prompt)}</Say>\n"
         "  </Gather>\n"

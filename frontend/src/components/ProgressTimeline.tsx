@@ -1,8 +1,10 @@
-import { Ban, CheckCircle2, Clock, FileText, PhoneCall, Radio, Sparkles } from "lucide-react";
+import { Ban, CheckCircle2, Clock, MessageCircle, PhoneCall, Radio, Sparkles } from "lucide-react";
 
-import { callStatusLabel, outcomeLabel, statusClass } from "../lib/format";
+import { callStatusLabel, statusClass } from "../lib/format";
 import type { TaskDetail } from "../types/domain";
 import { Badge, Button } from "./ui";
+import { CallDecisionPanel } from "./CallDecisionPanel";
+import { CallTranscript } from "./CallTranscript";
 
 export function ProgressTimeline({
   task,
@@ -173,52 +175,26 @@ export function ProgressTimeline({
                   {callStatusLabel(call.status)}
                 </Badge>
               </div>
-              {call.extraction_json ? (
-                <div className="mt-4 grid gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 text-sm text-slate-700 dark:border-slate-800/70 dark:bg-slate-950/40 dark:text-slate-300 sm:grid-cols-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                      {isDirectCallTask ? "Outcome" : isAppointmentTask ? "Appointment" : "Happy hour"}
-                    </p>
-                    <p className="mt-0.5 font-medium">
-                      {isDirectCallTask
-                        ? outcomeLabel(call.extraction_json.call_outcome)
-                        : isAppointmentTask
-                          ? call.extraction_json.appointment_available
-                          : call.extraction_json.happy_hour_available}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                      {isDirectCallTask ? "Follow-up" : isAppointmentTask ? "Time" : "Vegan"}
-                    </p>
-                    <p className="mt-0.5 font-medium">
-                      {isDirectCallTask
-                        ? call.extraction_json.follow_up_required
-                        : isAppointmentTask
-                          ? call.extraction_json.appointment_time ?? "Unknown"
-                          : call.extraction_json.vegan_options_available}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                      Confidence
-                    </p>
-                    <p className="mt-0.5 font-medium">
-                      {Math.round(call.extraction_json.confidence_score * 100)}%
-                    </p>
-                  </div>
+              {!isLive ? (
+                <div className="mt-4">
+                  <CallDecisionPanel
+                    call={call}
+                    isDirectCallTask={isDirectCallTask}
+                    isAppointmentTask={isAppointmentTask}
+                  />
                 </div>
               ) : null}
               {call.transcript ? (
-                <details className="mt-3 overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-950/60">
-                  <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900">
-                    <FileText size={14} />
-                    Transcript
-                  </summary>
-                  <pre className="max-h-44 overflow-auto border-t border-slate-200/70 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 scrollbar-thin dark:border-slate-800/70">
-                    {call.transcript}
-                  </pre>
-                </details>
+                <div className="mt-4">
+                  <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <MessageCircle size={12} />
+                    Conversation
+                  </p>
+                  <CallTranscript
+                    transcript={call.transcript}
+                    calleeLabel={call.business_name}
+                  />
+                </div>
               ) : null}
             </div>
           );
