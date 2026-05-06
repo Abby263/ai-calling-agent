@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ from app.schemas import (
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class InMemoryTaskStore:
@@ -34,6 +34,7 @@ class InMemoryTaskStore:
     def create_preview(
         self,
         *,
+        user_id: str | None = None,
         original_request: str,
         parsed_intent,
         location_lat: float | None,
@@ -45,6 +46,7 @@ class InMemoryTaskStore:
         task_id = str(uuid4())
         task = SearchTask(
             id=task_id,
+            user_id=user_id,
             original_request=original_request,
             parsed_intent_json=parsed_intent,
             location_lat=location_lat,
@@ -68,9 +70,16 @@ class InMemoryTaskStore:
             self._tasks[task_id] = detail
         return deepcopy(detail)
 
-    def list_tasks(self) -> list[TaskListItem]:
+    def ensure_user(self, *, external_subject: str, email: str | None, name: str | None) -> str:
+        return external_subject
+
+    def list_tasks(self, user_id: str | None = None) -> list[TaskListItem]:
         with self._lock:
-            details = list(self._tasks.values())
+            details = [
+                detail
+                for detail in self._tasks.values()
+                if user_id is None or detail.task.user_id == user_id
+            ]
         return [
             TaskListItem(
                 id=detail.task.id,
@@ -84,10 +93,12 @@ class InMemoryTaskStore:
             for detail in sorted(details, key=lambda item: item.task.created_at, reverse=True)
         ]
 
-    def get_task(self, task_id: str) -> TaskDetail | None:
+    def get_task(self, task_id: str, user_id: str | None = None) -> TaskDetail | None:
         with self._lock:
             detail = self._tasks.get(task_id)
-            return deepcopy(detail) if detail else None
+            if not detail or (user_id is not None and detail.task.user_id != user_id):
+                return None
+            return deepcopy(detail)
 
     def save_task(self, detail: TaskDetail) -> TaskDetail:
         with self._lock:
@@ -109,7 +120,9 @@ class InMemoryTaskStore:
             detail = self._tasks.get(task_id)
             if not detail:
                 return None
-            detail.calls = [call if existing.id == call.id else existing for existing in detail.calls]
+            detail.calls = [
+                call if existing.id == call.id else existing for existing in detail.calls
+            ]
             self._tasks[task_id] = detail
             return deepcopy(detail)
 
@@ -140,16 +153,19 @@ class InMemoryTaskStore:
             self._tasks[task_id] = detail
             return deepcopy(detail)
 
-    def cancel_task(self, task_id: str) -> TaskDetail | None:
+    def cancel_task(self, task_id: str, user_id: str | None = None) -> TaskDetail | None:
         with self._lock:
             detail = self._tasks.get(task_id)
-            if not detail:
+            if not detail or (user_id is not None and detail.task.user_id != user_id):
                 return None
             detail.task.status = TaskStatus.CANCELLED
             detail.task.completed_at = utc_now()
             self._tasks[task_id] = detail
             return deepcopy(detail)
 
-    def delete_task(self, task_id: str) -> bool:
+    def delete_task(self, task_id: str, user_id: str | None = None) -> bool:
         with self._lock:
+            detail = self._tasks.get(task_id)
+            if not detail or (user_id is not None and detail.task.user_id != user_id):
+                return False
             return self._tasks.pop(task_id, None) is not None

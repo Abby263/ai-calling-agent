@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     demo_mode: bool = Field(default=True, alias="DEMO_MODE")
     allow_call_recording: bool = Field(default=False, alias="ALLOW_CALL_RECORDING")
 
+    auth_required_setting: bool | None = Field(default=None, alias="AUTH_REQUIRED")
+    auth_session_secret: str | None = Field(default=None, alias="AUTH_SESSION_SECRET")
+    vercel_app_client_id: str | None = Field(default=None, alias="NEXT_PUBLIC_VERCEL_APP_CLIENT_ID")
+    vercel_app_client_secret: str | None = Field(default=None, alias="VERCEL_APP_CLIENT_SECRET")
+    vercel_oauth_client_id: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_ID")
+    vercel_oauth_client_secret: str | None = Field(default=None, alias="VERCEL_OAUTH_CLIENT_SECRET")
+
     @field_validator("backend_cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
@@ -56,6 +63,28 @@ class Settings(BaseSettings):
     def google_places_enabled(self) -> bool:
         return bool(self.google_places_api_key) and not self.demo_mode
 
+    @property
+    def vercel_client_id(self) -> str | None:
+        return self.vercel_app_client_id or self.vercel_oauth_client_id
+
+    @property
+    def vercel_client_secret(self) -> str | None:
+        return self.vercel_app_client_secret or self.vercel_oauth_client_secret
+
+    @property
+    def auth_required(self) -> bool:
+        if self.auth_required_setting is not None:
+            return self.auth_required_setting
+        return self.app_env == "production" and not self.demo_mode
+
+    @property
+    def auth_configured(self) -> bool:
+        return bool(
+            self.auth_session_secret
+            and self.vercel_client_id
+            and self.vercel_client_secret
+        )
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -63,4 +92,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

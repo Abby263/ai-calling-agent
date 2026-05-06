@@ -2,10 +2,13 @@ create extension if not exists "uuid-ossp";
 
 create table if not exists users (
   id uuid primary key default uuid_generate_v4(),
+  external_subject text unique,
   name text,
   email text unique,
   created_at timestamptz not null default now()
 );
+
+alter table users add column if not exists external_subject text;
 
 create table if not exists search_tasks (
   id uuid primary key default uuid_generate_v4(),
@@ -78,7 +81,8 @@ create table if not exists consent_disclosure_logs (
 );
 
 create index if not exists idx_search_tasks_user_created on search_tasks(user_id, created_at desc);
+create unique index if not exists idx_users_external_subject on users(external_subject) where external_subject is not null;
+create unique index if not exists idx_users_email_lower on users(lower(email)) where email is not null;
 create index if not exists idx_businesses_task_score on businesses(task_id, relevance_score desc);
 create index if not exists idx_calls_task_status on calls(task_id, status);
 create index if not exists idx_calls_sid on calls(call_sid);
-

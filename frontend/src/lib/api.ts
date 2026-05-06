@@ -1,5 +1,6 @@
 import type {
   ApproveCallsRequest,
+  AuthSession,
   TaskDetail,
   TaskListItem,
   TaskPreviewRequest
@@ -8,8 +9,19 @@ import type {
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? "" : "http://localhost:8000");
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {})
@@ -19,7 +31,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
+    throw new ApiError(detail || `Request failed with ${response.status}`, response.status);
   }
 
   if (response.status === 204) {
@@ -29,6 +41,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getAuthSession() {
+    return request<AuthSession>("/api/auth/session");
+  },
+  login() {
+    const next = encodeURIComponent(window.location.pathname || "/app");
+    window.location.href = `${API_BASE}/api/auth/login?next=${next}`;
+  },
+  logout() {
+    return request<void>("/api/auth/logout", { method: "POST" });
+  },
   previewTask(payload: TaskPreviewRequest) {
     return request<TaskDetail>("/api/tasks/preview", {
       method: "POST",

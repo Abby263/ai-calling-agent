@@ -39,6 +39,8 @@ def create_app() -> FastAPI:
             "google_places_enabled": settings.google_places_enabled,
             "twilio_enabled": settings.twilio_enabled,
             "openai_enabled": settings.openai_enabled,
+            "auth_required": settings.auth_required,
+            "auth_configured": settings.auth_configured,
         }
 
     app.include_router(api_router)

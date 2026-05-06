@@ -11,6 +11,8 @@ import {
   Globe2,
   ListChecks,
   LockKeyhole,
+  LogIn,
+  LogOut,
   MapPin,
   Mic2,
   Moon,
@@ -21,6 +23,7 @@ import {
   Sparkles,
   Sun,
   Target,
+  UserCircle,
   Users,
   Workflow
 } from "lucide-react";
@@ -31,9 +34,9 @@ import { ProgressTimeline } from "./components/ProgressTimeline";
 import { RequestComposer } from "./components/RequestComposer";
 import { ResultsView } from "./components/ResultsView";
 import { Badge, Button } from "./components/ui";
-import { api } from "./lib/api";
+import { ApiError, api } from "./lib/api";
 import { statusClass } from "./lib/format";
-import type { LocationInput, Question, SearchFilters, TaskDetail, TaskListItem } from "./types/domain";
+import type { AuthSession, LocationInput, Question, SearchFilters, TaskDetail, TaskListItem } from "./types/domain";
 
 type Stage = "request" | "preview" | "progress" | "results";
 
@@ -364,6 +367,57 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp }: LandingPageProps) {
   );
 }
 
+function AuthNotice({
+  session,
+  loading,
+  onSignIn
+}: {
+  session: AuthSession | null;
+  loading: boolean;
+  onSignIn: () => void;
+}) {
+  if (loading || !session?.auth_required || session.authenticated) return null;
+
+  const configured = session.auth_configured;
+  return (
+    <section
+      className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 shadow-soft ${
+        configured
+          ? "border-brand-200 bg-brand-50/90 text-brand-900 dark:border-brand-900/60 dark:bg-brand-950/35 dark:text-brand-100"
+          : "border-amber-200 bg-amber-50/90 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-100"
+      }`}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <span
+          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            configured
+              ? "bg-white text-brand-700 dark:bg-slate-950 dark:text-brand-300"
+              : "bg-white text-amber-700 dark:bg-slate-950 dark:text-amber-300"
+          }`}
+        >
+          <LockKeyhole size={17} />
+        </span>
+        <div>
+          <p className="font-semibold">
+            {configured ? "Sign in to run paid tasks" : "Authentication setup is incomplete"}
+          </p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 opacity-80">
+            {configured
+              ? "The website is public, but creating tasks, viewing stored task data, and approving calls requires a signed-in session."
+              : "Set AUTH_REQUIRED, AUTH_SESSION_SECRET, NEXT_PUBLIC_VERCEL_APP_CLIENT_ID, and VERCEL_APP_CLIENT_SECRET in Vercel before real users test the paid flow."}
+          </p>
+        </div>
+      </div>
+      {configured ? (
+        <Button type="button" onClick={onSignIn}>
+          <LogIn size={16} />
+          Sign in with Vercel
+        </Button>
+      ) : null}
+    </section>
+  );
+}
+
 function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
   const [stage, setStage] = useState<Stage>("request");
   const [requestText, setRequestText] = useState(DEFAULT_REQUEST);
@@ -371,6 +425,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
   const [location, setLocation] = useState<LocationInput>({ label: "Toronto, ON" });
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [history, setHistory] = useState<TaskListItem[]>([]);
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [maxCalls, setMaxCalls] = useState(5);
@@ -379,17 +435,40 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
 
   const activeId = task?.task.id;
 
+  const refreshAuth = useCallback(async () => {
+    try {
+      setAuthSession(await api.getAuthSession());
+    } catch {
+      setAuthSession({
+        auth_required: false,
+        auth_configured: false,
+        authenticated: false,
+        user: null
+      });
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
   const refreshHistory = useCallback(async () => {
+    if (authSession?.auth_required && !authSession.authenticated) {
+      setHistory([]);
+      return;
+    }
     try {
       setHistory(await api.listTasks());
     } catch {
       setHistory([]);
     }
-  }, []);
+  }, [authSession?.auth_required, authSession?.authenticated]);
 
   useEffect(() => {
-    refreshHistory();
-  }, [refreshHistory]);
+    refreshAuth();
+  }, [refreshAuth]);
+
+  useEffect(() => {
+    if (!authLoading) refreshHistory();
+  }, [authLoading, refreshHistory]);
 
   useEffect(() => {
     if (!task || !["calling", "summarizing"].includes(task.task.status)) {
@@ -403,13 +482,51 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
           setStage("results");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Polling failed.");
+        handleApiFailure(err, "Polling failed.");
       }
     }, 3000);
     return () => window.clearInterval(interval);
   }, [task]);
 
+  function handleAuthGate(): boolean {
+    if (!authSession?.auth_required) return false;
+    if (!authSession.auth_configured) {
+      setError("Authentication is required, but Vercel OAuth is not configured yet.");
+      return true;
+    }
+    if (!authSession.authenticated) {
+      api.login();
+      return true;
+    }
+    return false;
+  }
+
+  function handleApiFailure(err: unknown, fallback: string) {
+    if (err instanceof ApiError && err.status === 401) {
+      api.login();
+      return;
+    }
+    setError(err instanceof Error ? err.message : fallback);
+  }
+
+  async function handleLogout() {
+    setLoading(true);
+    setError(null);
+    try {
+      await api.logout();
+      setTask(null);
+      setStage("request");
+      setHistory([]);
+      await refreshAuth();
+    } catch (err) {
+      handleApiFailure(err, "Sign out failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handlePreview() {
+    if (handleAuthGate()) return;
     setLoading(true);
     setError(null);
     try {
@@ -425,7 +542,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
       setStage("preview");
       refreshHistory();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Preview failed.");
+      handleApiFailure(err, "Preview failed.");
     } finally {
       setLoading(false);
     }
@@ -433,6 +550,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
 
   async function handleApprove() {
     if (!task) return;
+    if (handleAuthGate()) return;
     setLoading(true);
     setError(null);
     try {
@@ -447,13 +565,14 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
       setStage(updated.summary ? "results" : "progress");
       refreshHistory();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Call approval failed.");
+      handleApiFailure(err, "Call approval failed.");
     } finally {
       setLoading(false);
     }
   }
 
   async function openTask(id: string) {
+    if (handleAuthGate()) return;
     setLoading(true);
     setError(null);
     try {
@@ -466,7 +585,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
       else if (detail.calls.length) setStage("progress");
       else setStage("preview");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open task.");
+      handleApiFailure(err, "Could not open task.");
     } finally {
       setLoading(false);
     }
@@ -474,18 +593,28 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
 
   async function cancelTask() {
     if (!task) return;
-    const updated = await api.cancelTask(task.task.id);
-    setTask(updated);
-    refreshHistory();
+    if (handleAuthGate()) return;
+    try {
+      const updated = await api.cancelTask(task.task.id);
+      setTask(updated);
+      refreshHistory();
+    } catch (err) {
+      handleApiFailure(err, "Could not cancel task.");
+    }
   }
 
   async function deleteTask(id: string) {
-    await api.deleteTask(id);
-    if (task?.task.id === id) {
-      setTask(null);
-      setStage("request");
+    if (handleAuthGate()) return;
+    try {
+      await api.deleteTask(id);
+      if (task?.task.id === id) {
+        setTask(null);
+        setStage("request");
+      }
+      refreshHistory();
+    } catch (err) {
+      handleApiFailure(err, "Could not delete task.");
     }
-    refreshHistory();
   }
 
   function startNewTask() {
@@ -575,6 +704,39 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
                       <ShieldCheck size={12} />
                       AI disclosure
                     </Badge>
+                    {authSession?.auth_required ? (
+                      authSession.authenticated ? (
+                        <>
+                          <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                            <UserCircle size={12} />
+                            {authSession.user?.name || authSession.user?.email || "Signed in"}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-10 w-10 px-0 sm:w-auto sm:px-4"
+                            aria-label="Sign out"
+                            title="Sign out"
+                            onClick={handleLogout}
+                            disabled={loading}
+                          >
+                            <LogOut size={16} />
+                            <span className="hidden sm:inline">Sign out</span>
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10 px-4"
+                          onClick={api.login}
+                          disabled={authLoading || !authSession.auth_configured}
+                        >
+                          <LogIn size={16} />
+                          Sign in
+                        </Button>
+                      )
+                    ) : null}
                     <Button
                       type="button"
                       variant="secondary"
@@ -673,6 +835,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome }: ConsolePageProps) {
                 </div>
               </div>
             </header>
+
+            <AuthNotice session={authSession} loading={authLoading} onSignIn={api.login} />
 
             <div className="animate-fade-in">
               {stage === "request" ? (

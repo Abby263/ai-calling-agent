@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -29,11 +28,15 @@ class PostgresTaskStore:
     """
 
     def __init__(self, database_url: str) -> None:
-        self.pool = ConnectionPool(database_url, kwargs={"row_factory": dict_row})
+        self.pool = ConnectionPool(
+            database_url,
+            kwargs={"row_factory": dict_row, "prepare_threshold": None},
+        )
 
     def create_preview(
         self,
         *,
+        user_id: str | None = None,
         original_request: str,
         parsed_intent,
         location_lat: float | None,
@@ -48,13 +51,14 @@ class PostgresTaskStore:
                 conn.execute(
                     """
                     insert into search_tasks (
-                      id, original_request, parsed_intent_json, location_lat, location_lng,
+                      id, user_id, original_request, parsed_intent_json, location_lat, location_lng,
                       location_label, radius, status, created_at
                     )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         task_id,
+                        user_id,
                         original_request,
                         Jsonb(parsed_intent.model_dump(mode="json")),
                         location_lat,
@@ -75,10 +79,49 @@ class PostgresTaskStore:
         detail.editable_questions = parsed_intent.required_questions
         return detail
 
-    def list_tasks(self) -> list[TaskListItem]:
+    def ensure_user(self, *, external_subject: str, email: str | None, name: str | None) -> str:
+        with self.pool.connection() as conn:
+            with conn.transaction():
+                row = None
+                if email:
+                    row = conn.execute(
+                        "select id from users where lower(email) = lower(%s)",
+                        (email,),
+                    ).fetchone()
+                if not row:
+                    row = conn.execute(
+                        "select id from users where external_subject = %s",
+                        (external_subject,),
+                    ).fetchone()
+                if row:
+                    conn.execute(
+                        """
+                        update users
+                        set external_subject = coalesce(external_subject, %s),
+                            email = coalesce(%s, email),
+                            name = coalesce(%s, name)
+                        where id = %s
+                        """,
+                        (external_subject, email, name, row["id"]),
+                    )
+                    return str(row["id"])
+
+                created = conn.execute(
+                    """
+                    insert into users (external_subject, email, name)
+                    values (%s, %s, %s)
+                    returning id
+                    """,
+                    (external_subject, email, name),
+                ).fetchone()
+        return str(created["id"])
+
+    def list_tasks(self, user_id: str | None = None) -> list[TaskListItem]:
+        where_clause = "where t.user_id = %s" if user_id else ""
+        params = (user_id,) if user_id else ()
         with self.pool.connection() as conn:
             rows = conn.execute(
-                """
+                f"""
                 select
                   t.id,
                   t.original_request,
@@ -90,10 +133,12 @@ class PostgresTaskStore:
                 from search_tasks t
                 left join businesses b on b.task_id = t.id
                 left join calls c on c.task_id = t.id
+                {where_clause}
                 group by t.id
                 order by t.created_at desc
                 limit 100
-                """
+                """,
+                params,
             ).fetchall()
         return [
             TaskListItem(
@@ -108,13 +153,23 @@ class PostgresTaskStore:
             for row in rows
         ]
 
-    def get_task(self, task_id: str) -> TaskDetail | None:
+    def get_task(self, task_id: str, user_id: str | None = None) -> TaskDetail | None:
+        task_query = "select * from search_tasks where id = %s"
+        params: tuple[str, ...] = (task_id,)
+        if user_id:
+            task_query += " and user_id = %s"
+            params = (task_id, user_id)
         with self.pool.connection() as conn:
-            task_row = conn.execute("select * from search_tasks where id = %s", (task_id,)).fetchone()
+            task_row = conn.execute(task_query, params).fetchone()
             if not task_row:
                 return None
             business_rows = conn.execute(
-                "select * from businesses where task_id = %s order by relevance_score desc nulls last",
+                """
+                select *
+                from businesses
+                where task_id = %s
+                order by relevance_score desc nulls last
+                """,
                 (task_id,),
             ).fetchall()
             call_rows = conn.execute(
@@ -201,7 +256,9 @@ class PostgresTaskStore:
             with conn.transaction():
                 conn.execute(
                     """
-                    insert into summaries (id, task_id, final_summary, recommendation_json, created_at)
+                    insert into summaries (
+                      id, task_id, final_summary, recommendation_json, created_at
+                    )
                     values (%s, %s, %s, %s, %s)
                     """,
                     (
@@ -218,17 +275,27 @@ class PostgresTaskStore:
                 )
         return self.get_task(task_id)
 
-    def cancel_task(self, task_id: str) -> TaskDetail | None:
+    def cancel_task(self, task_id: str, user_id: str | None = None) -> TaskDetail | None:
+        where_clause = "id = %s"
+        params: tuple[str, ...] = (task_id,)
+        if user_id:
+            where_clause += " and user_id = %s"
+            params = (task_id, user_id)
         with self.pool.connection() as conn:
-            conn.execute(
-                "update search_tasks set status = %s, completed_at = %s where id = %s",
-                (TaskStatus.CANCELLED, utc_now(), task_id),
+            result = conn.execute(
+                f"update search_tasks set status = %s, completed_at = %s where {where_clause}",
+                (TaskStatus.CANCELLED, utc_now(), *params),
             )
-        return self.get_task(task_id)
+        return self.get_task(task_id, user_id=user_id) if result.rowcount else None
 
-    def delete_task(self, task_id: str) -> bool:
+    def delete_task(self, task_id: str, user_id: str | None = None) -> bool:
+        where_clause = "id = %s"
+        params: tuple[str, ...] = (task_id,)
+        if user_id:
+            where_clause += " and user_id = %s"
+            params = (task_id, user_id)
         with self.pool.connection() as conn:
-            result = conn.execute("delete from search_tasks where id = %s", (task_id,))
+            result = conn.execute(f"delete from search_tasks where {where_clause}", params)
         return result.rowcount > 0
 
     def _insert_business(self, conn, business: BusinessCandidate) -> None:
@@ -293,7 +360,11 @@ class PostgresTaskStore:
                 call.ended_at,
                 call.transcript,
                 call.recording_url,
-                Jsonb(call.extraction_json.model_dump(mode="json")) if call.extraction_json else None,
+                (
+                    Jsonb(call.extraction_json.model_dump(mode="json"))
+                    if call.extraction_json
+                    else None
+                ),
                 Jsonb([question.model_dump(mode="json") for question in call.questions]),
                 Jsonb(call.disclosure_log),
             ),
@@ -367,4 +438,3 @@ class PostgresTaskStore:
 
     def _float_or_none(self, value: Decimal | float | int | None) -> float | None:
         return float(value) if value is not None else None
-

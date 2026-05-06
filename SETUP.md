@@ -8,7 +8,7 @@ Live app:
 - App console: `https://ai-calling-agent-snowy.vercel.app/app`
 - Health check: `https://ai-calling-agent-snowy.vercel.app/health`
 
-Current status: the deployed app is in safe demo mode until Vercel environment variables are added. In demo mode it shows the full UI flow, but it does not call OpenAI, Google Places, or Twilio.
+In demo mode the app shows the full UI flow, but it does not call OpenAI, Google Places, or Twilio. For a real Vercel test, set the production env vars below, apply the database schema, and redeploy.
 
 ## 1. What You Need For A Real Vercel Test
 
@@ -17,10 +17,11 @@ Required:
 | Service | Why it is needed | Value you will add to Vercel |
 | --- | --- | --- |
 | Vercel | Hosts the web app and FastAPI API route | Project linked to this GitHub repo |
-| PostgreSQL | Stores tasks, businesses, calls, transcripts, and summaries | `DATABASE_URL` |
+| Neon Postgres | Stores users, tasks, businesses, calls, transcripts, and summaries | `DATABASE_URL` |
 | OpenAI | Parses requests, extracts call answers, and writes summaries | `OPENAI_API_KEY`, `OPENAI_MODEL` |
 | Google Places | Finds nearby businesses for discovery requests | `GOOGLE_PLACES_API_KEY` |
 | Twilio Voice | Places outbound phone calls | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
+| Sign in with Vercel | Gates paid task execution and stored task data | `AUTH_REQUIRED`, `AUTH_SESSION_SECRET`, `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`, `VERCEL_APP_CLIENT_SECRET` |
 
 Optional for this MVP:
 
@@ -46,6 +47,8 @@ BACKEND_CORS_ORIGINS=https://ai-calling-agent-snowy.vercel.app
 MAX_CALLS_PER_TASK=5
 DEMO_MODE=false
 ALLOW_CALL_RECORDING=false
+AUTH_REQUIRED=true
+AUTH_SESSION_SECRET=<random-32-byte-secret>
 
 DATABASE_URL=postgresql://...
 OPENAI_API_KEY=sk-...
@@ -54,9 +57,13 @@ GOOGLE_PLACES_API_KEY=...
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
 TWILIO_FROM_NUMBER=+14165550100
+NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
+VERCEL_APP_CLIENT_SECRET=...
 ```
 
 Do not set `VITE_API_BASE_URL` on Vercel for the current deployment. The frontend and backend are served from the same Vercel origin, so the app uses `/api` automatically.
+
+If `APP_ENV=production` and `DEMO_MODE=false`, the backend defaults to requiring auth even if `AUTH_REQUIRED` is omitted. Set the auth env vars before sharing the link so task APIs do not fail closed.
 
 CLI option:
 
@@ -67,6 +74,8 @@ npx vercel env add BACKEND_CORS_ORIGINS production
 npx vercel env add MAX_CALLS_PER_TASK production
 npx vercel env add DEMO_MODE production
 npx vercel env add ALLOW_CALL_RECORDING production
+npx vercel env add AUTH_REQUIRED production
+npx vercel env add AUTH_SESSION_SECRET production
 npx vercel env add DATABASE_URL production
 npx vercel env add OPENAI_API_KEY production
 npx vercel env add OPENAI_MODEL production
@@ -74,6 +83,8 @@ npx vercel env add GOOGLE_PLACES_API_KEY production
 npx vercel env add TWILIO_ACCOUNT_SID production
 npx vercel env add TWILIO_AUTH_TOKEN production
 npx vercel env add TWILIO_FROM_NUMBER production
+npx vercel env add NEXT_PUBLIC_VERCEL_APP_CLIENT_ID production
+npx vercel env add VERCEL_APP_CLIENT_SECRET production
 ```
 
 After changing any Vercel env var, redeploy:
@@ -84,17 +95,16 @@ npx vercel redeploy
 
 ## 3. How To Get Each Value
 
-### PostgreSQL: `DATABASE_URL`
+### Neon Postgres: `DATABASE_URL`
 
-Use Neon, Supabase, Railway, Render, RDS, or any hosted Postgres provider.
+Use Neon for the production database.
 
-Fastest path with Neon:
-
-1. Create a Neon project.
-2. Create a database.
-3. Copy the pooled connection string if Neon offers one.
-4. Keep `sslmode=require` if it is included.
-5. Add the full string to Vercel as `DATABASE_URL`.
+1. Create or open a Neon project.
+2. Click **Connect** in the Neon dashboard.
+3. Select the production branch, database, and role.
+4. Turn on the pooled connection option for Vercel/serverless deployments if Neon offers it. The hostname usually contains `-pooler`.
+5. Copy the connection string and keep `sslmode=require` if it is included.
+6. Add the full string to Vercel as `DATABASE_URL`.
 
 Apply the schema once from your machine:
 
@@ -102,7 +112,41 @@ Apply the schema once from your machine:
 psql "$DATABASE_URL" -f backend/app/db/schema.sql
 ```
 
-The app only uses Postgres when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Postgres, deployed task history is not reliable.
+You can also paste the contents of `backend/app/db/schema.sql` into the Neon SQL Editor and run it there.
+
+The app only uses Neon when `DEMO_MODE=false` and `DATABASE_URL` exists. Without Neon, deployed task history is not reliable.
+
+### Vercel Sign-In: `AUTH_*` and Vercel OAuth
+
+This MVP uses Sign in with Vercel as the first auth gate. The landing page and console UI stay public, but creating tasks, approving calls, reading stored task history, reading transcripts, canceling tasks, and deleting tasks require login when `AUTH_REQUIRED=true`.
+
+Important: Sign in with Vercel means users sign in with an existing Vercel account. That is acceptable for a controlled production test. For broad consumer sign-up later, use Clerk, Auth0, or another consumer identity provider.
+
+1. Open Vercel and go to the Integrations Console for your account/team.
+2. Create a new integration/app for this product.
+3. Add this production redirect URL:
+
+```text
+https://ai-calling-agent-snowy.vercel.app/api/auth/callback
+```
+
+4. Add this local redirect URL only if you plan to test OAuth locally:
+
+```text
+http://localhost:8000/api/auth/callback
+```
+
+5. Enable identity scopes for OpenID, email, and profile.
+6. Copy the client id to `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`.
+7. Copy the client secret to `VERCEL_APP_CLIENT_SECRET`.
+8. Generate a session secret:
+
+```bash
+openssl rand -base64 32
+```
+
+9. Add it to Vercel as `AUTH_SESSION_SECRET`.
+10. Set `AUTH_REQUIRED=true`.
 
 ### OpenAI: `OPENAI_API_KEY`
 
@@ -151,9 +195,10 @@ Use this checklist before sharing the app with users.
 
 1. Add all required Vercel env vars from section 2.
 2. Apply the database schema.
-3. Redeploy production.
-4. Open `https://ai-calling-agent-snowy.vercel.app/health`.
-5. Confirm this response shape:
+3. Confirm Sign in with Vercel has the production callback URL.
+4. Redeploy production.
+5. Open `https://ai-calling-agent-snowy.vercel.app/health`.
+6. Confirm this response shape:
 
 ```json
 {
@@ -161,20 +206,23 @@ Use this checklist before sharing the app with users.
   "demo_mode": false,
   "google_places_enabled": true,
   "twilio_enabled": true,
-  "openai_enabled": true
+  "openai_enabled": true,
+  "auth_required": true,
+  "auth_configured": true
 }
 ```
 
-6. Open `https://ai-calling-agent-snowy.vercel.app/app`.
-7. Run a low-risk test request with one verified number:
+7. Open `https://ai-calling-agent-snowy.vercel.app/app`.
+8. Click **Sign in with Vercel** and complete login.
+9. Run a low-risk test request with one verified number:
 
 ```text
 Call +1 YOUR VERIFIED TEST NUMBER. Say this is an AI assistant calling on behalf of a user and ask whether they are available for a test dinner invitation. Track the answer.
 ```
 
-8. Approve only one call.
-9. Confirm the call status, transcript, extracted answer, and final summary.
-10. Only then test nearby business discovery.
+10. Approve only one call.
+11. Confirm the call status, transcript, extracted answer, and final summary.
+12. Only then test nearby business discovery.
 
 For the first public user test, keep:
 
@@ -283,6 +331,17 @@ Fix:
 npx vercel env ls
 npx vercel redeploy
 ```
+
+### `/health` says `auth_configured: false`
+
+Check all four auth env vars in Vercel production:
+
+- `AUTH_REQUIRED=true`
+- `AUTH_SESSION_SECRET`
+- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
+- `VERCEL_APP_CLIENT_SECRET`
+
+Then redeploy production.
 
 ### `/health` says a provider is disabled
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 
 from app.db.store import utc_now
 from app.schemas import (
@@ -13,6 +14,7 @@ from app.schemas import (
     TaskPreviewRequest,
 )
 from app.services.agents.transcript_extraction import TranscriptExtractionAgent
+from app.services.auth import AuthenticatedUser, VercelOAuthService
 from app.services.compliance import build_call_script
 
 router = APIRouter(prefix="/api")
@@ -26,22 +28,53 @@ def store(request: Request):
     return request.app.state.store
 
 
+def auth(request: Request) -> VercelOAuthService:
+    return VercelOAuthService(request.app.state.settings)
+
+
+def task_user(request: Request) -> AuthenticatedUser | None:
+    return auth(request).require_user(request)
+
+
+@router.get("/auth/session")
+async def auth_session(request: Request) -> dict[str, object]:
+    return auth(request).session_payload(request)
+
+
+@router.get("/auth/login")
+async def auth_login(request: Request) -> RedirectResponse:
+    return auth(request).begin_login(request)
+
+
+@router.get("/auth/callback")
+async def auth_callback(request: Request) -> RedirectResponse:
+    return await auth(request).finish_login(request)
+
+
+@router.post("/auth/logout", status_code=204)
+async def auth_logout(request: Request) -> Response:
+    return auth(request).logout()
+
+
 @router.post("/tasks/preview", response_model=TaskDetail)
 async def preview_task(payload: TaskPreviewRequest, request: Request) -> TaskDetail:
+    user = task_user(request)
     try:
-        return await orchestrator(request).preview(payload)
+        return await orchestrator(request).preview(payload, user_id=user.user_id if user else None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/tasks", response_model=list[TaskListItem])
 async def list_tasks(request: Request) -> list[TaskListItem]:
-    return store(request).list_tasks()
+    user = task_user(request)
+    return store(request).list_tasks(user_id=user.user_id if user else None)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskDetail)
 async def get_task(task_id: str, request: Request) -> TaskDetail:
-    detail = store(request).get_task(task_id)
+    user = task_user(request)
+    detail = store(request).get_task(task_id, user_id=user.user_id if user else None)
     if not detail:
         raise HTTPException(status_code=404, detail="Task not found")
     return detail
@@ -53,17 +86,27 @@ async def approve_calls(
     payload: ApproveCallsRequest,
     request: Request,
 ) -> TaskDetail:
-    return await orchestrator(request).approve_calls(task_id, payload)
+    user = task_user(request)
+    return await orchestrator(request).approve_calls(
+        task_id,
+        payload,
+        user_id=user.user_id if user else None,
+    )
 
 
 @router.post("/tasks/{task_id}/summarize", response_model=TaskDetail)
 async def summarize_task(task_id: str, request: Request) -> TaskDetail:
-    return await orchestrator(request).regenerate_summary(task_id)
+    user = task_user(request)
+    return await orchestrator(request).regenerate_summary(
+        task_id,
+        user_id=user.user_id if user else None,
+    )
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=TaskDetail)
 async def cancel_task(task_id: str, request: Request) -> TaskDetail:
-    detail = store(request).cancel_task(task_id)
+    user = task_user(request)
+    detail = store(request).cancel_task(task_id, user_id=user.user_id if user else None)
     if not detail:
         raise HTTPException(status_code=404, detail="Task not found")
     return detail
@@ -71,7 +114,8 @@ async def cancel_task(task_id: str, request: Request) -> TaskDetail:
 
 @router.delete("/tasks/{task_id}", status_code=204)
 async def delete_task(task_id: str, request: Request) -> Response:
-    deleted = store(request).delete_task(task_id)
+    user = task_user(request)
+    deleted = store(request).delete_task(task_id, user_id=user.user_id if user else None)
     if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
     return Response(status_code=204)
@@ -138,7 +182,7 @@ async def twilio_transcript(
     call.transcript = TranscriptionText
     call.recording_url = RecordingUrl
     call.status = CallStatus.COMPLETED
-    call.ended_at = datetime.now(timezone.utc)
+    call.ended_at = datetime.now(UTC)
     call.extraction_json = await TranscriptExtractionAgent(request.app.state.settings).extract(call)
     updated = store(request).update_call(detail.task.id, call)
     if updated and all(existing.status == CallStatus.COMPLETED for existing in updated.calls):
@@ -172,4 +216,3 @@ def _xml_escape(value: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&apos;")
     )
-
