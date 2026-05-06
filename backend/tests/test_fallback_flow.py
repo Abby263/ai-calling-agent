@@ -39,6 +39,29 @@ def test_clerk_secret_configures_auth_gate():
     assert settings.clerk_jwks_endpoint == "https://api.clerk.com/v1/jwks"
 
 
+def test_livekit_calling_requires_runtime_and_outbound_trunk():
+    settings = Settings(
+        DEMO_MODE=False,
+        VOICE_RUNTIME="livekit",
+        LIVEKIT_URL="wss://example.livekit.cloud",
+        LIVEKIT_API_KEY="key",
+        LIVEKIT_API_SECRET="secret",
+    )
+
+    assert settings.livekit_enabled is True
+    assert settings.livekit_calling_enabled is False
+
+    ready = Settings(
+        DEMO_MODE=False,
+        VOICE_RUNTIME="livekit",
+        LIVEKIT_URL="wss://example.livekit.cloud",
+        LIVEKIT_API_KEY="key",
+        LIVEKIT_API_SECRET="secret",
+        LIVEKIT_SIP_OUTBOUND_TRUNK_ID="ST_demo",
+    )
+    assert ready.livekit_calling_enabled is True
+
+
 def test_scripted_twilio_prompt_asks_one_question_at_a_time():
     questions = [
         Question(id="q1", text="Can you come to dinner tonight?", required=True),
@@ -158,6 +181,40 @@ async def test_direct_phone_number_task_tracks_general_answers():
     ]
     assert outcomes == ["accepted", "maybe", "declined"]
     assert follow_up == ["no", "yes", "no"]
+
+
+@pytest.mark.asyncio
+async def test_direct_call_request_without_numbers_asks_for_clarification():
+    settings = Settings(DEMO_MODE=True, MAX_CALLS_PER_TASK=5)
+    orchestrator = TaskOrchestrator(settings, InMemoryTaskStore())
+    preview = await orchestrator.preview(
+        TaskPreviewRequest(
+            original_request="Call the below numbers and invite them for dinner tonight.",
+            filters=SearchFilters(max_calls=3),
+        )
+    )
+
+    intent = preview.task.parsed_intent_json
+    assert intent.task_kind == "direct_calls"
+    assert intent.direct_phone_numbers == []
+    assert intent.constraints["needs_clarification"] is True
+    assert "phone number" in intent.constraints["clarifying_questions"][0]
+    assert preview.businesses == []
+    assert preview.editable_questions
+
+
+def test_in_memory_store_tracks_usage_and_clears_history():
+    store = InMemoryTaskStore()
+    user_id = store.ensure_user(
+        external_subject="clerk:user_123",
+        email="user@example.com",
+        name="Demo User",
+    )
+
+    assert store.get_request_count(user_id) == 0
+    assert store.increment_request_count(user_id) == 1
+    assert store.get_request_count(user_id) == 1
+    assert store.delete_tasks(user_id=user_id) == 0
 
 
 @pytest.mark.asyncio

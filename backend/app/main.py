@@ -32,15 +32,19 @@ def create_app() -> FastAPI:
     app.state.orchestrator = TaskOrchestrator(settings, store)
 
     @app.get("/health")
-    async def health() -> dict[str, str | bool]:
+    async def health() -> dict[str, str | bool | int]:
         return {
             "status": "ok",
             "demo_mode": settings.demo_mode,
             "google_places_enabled": settings.google_places_enabled,
             "twilio_enabled": settings.twilio_enabled,
+            "voice_runtime": settings.voice_runtime,
+            "livekit_enabled": settings.livekit_enabled,
+            "livekit_calling_enabled": settings.livekit_calling_enabled,
             "openai_enabled": settings.openai_enabled,
             "auth_required": settings.auth_required,
             "auth_configured": settings.auth_configured,
+            "free_request_limit": settings.free_request_limit,
         }
 
     app.include_router(api_router)

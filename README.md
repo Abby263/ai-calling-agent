@@ -15,6 +15,7 @@ Live Vercel app: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-
 
 - Landing page: [https://ai-calling-agent-snowy.vercel.app](https://ai-calling-agent-snowy.vercel.app)
 - App console: [https://ai-calling-agent-snowy.vercel.app/app](https://ai-calling-agent-snowy.vercel.app/app)
+- Pricing: [https://ai-calling-agent-snowy.vercel.app/pricing](https://ai-calling-agent-snowy.vercel.app/pricing)
 
 Check [`/health`](https://ai-calling-agent-snowy.vercel.app/health) to confirm whether the deployed app is in demo mode or connected to production providers. `DEMO_MODE=true` demonstrates the full product flow without placing real calls, running real Places lookups, or making OpenAI requests.
 
@@ -89,8 +90,13 @@ flowchart LR
   Approval --> Planner["CallPlannerAgent"]
   Planner --> Orchestrator["Call orchestration"]
   Orchestrator --> Voice["VoiceCallAgent"]
-  Voice --> Telephony["Twilio today; LiveKit/Pipecat-ready boundary"]
-  Telephony --> Recipient["Business or contact"]
+  Voice --> Runtime{"Voice runtime"}
+  Runtime --> Twilio["Twilio Programmable Voice fallback"]
+  Runtime --> LiveKit["LiveKit room + SIP participant"]
+  LiveKit --> Worker["LiveKit agent worker + OpenAI Realtime"]
+  LiveKit --> TwilioSip["Twilio Elastic SIP trunk"]
+  TwilioSip --> Recipient["Business or contact"]
+  Twilio --> Recipient
   Recipient --> Transcript["Transcript and call status"]
   Transcript --> Extraction["TranscriptExtractionAgent"]
   Extraction --> Summary["SummaryAgent"]
@@ -110,6 +116,7 @@ flowchart LR
 | Auth | Clerk sign-in/sign-up; public website remains browsable, paid task APIs require login |
 | Agents | Request parsing, search, ranking, call planning, voice call behavior, transcript extraction, summary |
 | Telephony adapter | Outbound call provider abstraction. Current MVP uses Twilio adapter and demo fallback |
+| LiveKit worker | Optional production worker for realtime speech-to-speech calls with OpenAI Realtime |
 | Places adapter | Google Places integration with demo fallback |
 | AI adapter | OpenAI-powered planning, extraction, and summarization with deterministic fallback in demo mode |
 | Store | In-memory demo store or Neon Postgres-backed user/task/call/summary persistence |
@@ -166,6 +173,7 @@ For requests like "Book an appointment with a doctor from Apple Tree at Harbour 
 ├── frontend/                 # React + TypeScript + Tailwind web dashboard
 ├── mobile/                   # Expo-ready shell for later native mobile app
 ├── packages/shared/          # Shared TypeScript contracts
+├── workers/livekit_voice_agent/ # Long-running LiveKit Agents worker for realtime calls
 ├── docker-compose.yml        # Local PostgreSQL and Redis
 ├── SETUP.md                  # Detailed setup and provider configuration guide
 ├── vercel.json               # Vercel routing for frontend + API
@@ -194,8 +202,9 @@ AI and calling:
 
 - OpenAI-compatible planner, extraction, and summary agents
 - Twilio Programmable Voice adapter
+- LiveKit SIP + explicit agent dispatch path for realtime voice workers
 - Demo-mode deterministic fallbacks
-- Architecture supports replacing the call worker with LiveKit Agents or Pipecat for long-running realtime voice sessions
+- OpenAI Realtime-ready LiveKit worker scaffold for long-running voice sessions
 
 Search:
 
@@ -242,19 +251,45 @@ Open:
 | `REDIS_URL` | No | Recommended | Queue and workflow backend |
 | `BACKEND_CORS_ORIGINS` | Yes | Yes | Allowed frontend origins |
 | `MAX_CALLS_PER_TASK` | Yes | Yes | Hard call cap |
+| `FREE_REQUEST_LIMIT` | Yes | Yes | Free signed-in request quota |
 | `DEMO_MODE` | Yes | Yes | Enables or disables real providers |
 | `ALLOW_CALL_RECORDING` | Yes | Optional | Enables recordings when lawful |
 | `AUTH_REQUIRED` | Yes | Yes | Requires login for task APIs; production real mode defaults to true |
 | `CLERK_SECRET_KEY` | No | Yes when auth is required | Server-side Clerk token verification |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY` | No | Yes when auth is required | Clerk React sign-in/sign-up |
 | `CLERK_AUTHORIZED_PARTIES` | No | Recommended | Allowed frontend origins for Clerk session tokens |
+| `ADMIN_EMAILS` | No | Recommended | Comma-separated admin allowlist with unlimited requests |
+| `ADMIN_CLERK_SUBJECTS` | No | Optional | Comma-separated Clerk subject allowlist with unlimited requests |
+| `PAID_USER_EMAILS` | No | Optional | Manual paid allowlist until Stripe is added |
 | `OPENAI_API_KEY` | No | Yes | LLM planning, extraction, summary |
 | `OPENAI_MODEL` | Yes | Yes | LLM model name |
 | `GOOGLE_PLACES_API_KEY` | No | Yes for nearby search | Google Places search |
 | `TWILIO_ACCOUNT_SID` | No | Yes for calls | Twilio account |
 | `TWILIO_AUTH_TOKEN` | No | Yes for calls | Twilio API auth |
 | `TWILIO_FROM_NUMBER` | No | Yes for calls | Verified or purchased caller ID |
+| `VOICE_RUNTIME` | Yes | Yes | `twilio` or `livekit` call runtime |
+| `LIVEKIT_URL` | No | Yes for LiveKit calls | LiveKit Cloud or self-host URL |
+| `LIVEKIT_API_KEY` | No | Yes for LiveKit calls | LiveKit API key |
+| `LIVEKIT_API_SECRET` | No | Yes for LiveKit calls | LiveKit API secret |
+| `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` | No | Yes for LiveKit calls | LiveKit outbound SIP trunk ID |
+| `LIVEKIT_AGENT_NAME` | No | Yes for LiveKit calls | Explicitly dispatched agent name |
+| `LIVEKIT_WEBHOOK_SECRET` | No | Recommended | Shared secret for worker-to-API call updates |
 | `VITE_API_BASE_URL` | Yes locally | Optional on Vercel | Frontend API base URL |
+
+## Pricing And Usage Limits
+
+Normal signed-in users get one free concierge request by default. Admin and paid users are
+allowlisted with environment variables until Stripe billing is added.
+
+Public packaging in the app:
+
+- Free: `$0`, one evaluation request.
+- Personal: `$19/mo`, 20 requests/month, up to 5 calls per request.
+- Pro: `$49/mo`, 75 requests/month, LiveKit realtime voice-agent path.
+
+The pricing is based on expected blended request cost from telephony minutes, LiveKit agent/session
+minutes, OpenAI realtime or LLM usage, Places lookups, retries, and support. See
+[SETUP.md](SETUP.md) for the quota env vars.
 
 ## API Overview
 
@@ -268,6 +303,8 @@ Open:
 | `/api/tasks` | GET | List task history |
 | `/api/tasks/{id}/cancel` | POST | Cancel a running task |
 | `/api/tasks/{id}` | DELETE | Delete task history |
+| `/api/tasks` | DELETE | Clear signed-in user's task history |
+| `/api/webhooks/livekit/calls/{call_id}` | POST | LiveKit worker call transcript/status callback |
 
 See [docs/api.md](docs/api.md) for more detail.
 
@@ -289,7 +326,7 @@ Production setup requires:
 Recommended production architecture for real realtime calls:
 
 - Keep Vercel for the web dashboard and API facade.
-- Run voice workers separately on LiveKit Cloud, Fly.io, Render, Railway, ECS, or Kubernetes.
+- Run the LiveKit voice worker separately on LiveKit Cloud, Fly.io, Render, Railway, ECS, or Kubernetes.
 - Use Neon Postgres for durable user, task, and call artifacts.
 - Use Redis or a workflow engine for retries and long-running orchestration.
 

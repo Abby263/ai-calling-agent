@@ -28,7 +28,7 @@ Optional for this MVP:
 | Service | When to add it | Value |
 | --- | --- | --- |
 | Redis | Add when you move calls to a durable queue or external worker | `REDIS_URL` |
-| LiveKit or Pipecat worker | Add when you replace scripted Twilio calls with realtime voice agents | Worker-specific env vars |
+| LiveKit Cloud | Add when you replace scripted Twilio calls with realtime voice agents | `VOICE_RUNTIME`, `LIVEKIT_*` |
 
 ## 2. Vercel Environment Variables
 
@@ -45,6 +45,7 @@ APP_ENV=production
 PUBLIC_BASE_URL=https://ai-calling-agent-snowy.vercel.app
 BACKEND_CORS_ORIGINS=https://ai-calling-agent-snowy.vercel.app
 MAX_CALLS_PER_TASK=5
+FREE_REQUEST_LIMIT=1
 DEMO_MODE=false
 ALLOW_CALL_RECORDING=false
 AUTH_REQUIRED=true
@@ -52,14 +53,25 @@ CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_JWKS_URL=https://your-clerk-frontend-api.clerk.accounts.dev/.well-known/jwks.json
 CLERK_AUTHORIZED_PARTIES=https://ai-calling-agent-snowy.vercel.app
+ADMIN_EMAILS=you@example.com
+ADMIN_CLERK_SUBJECTS=
+PAID_USER_EMAILS=
 
 DATABASE_URL=postgresql://...
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4.1-mini
 GOOGLE_PLACES_API_KEY=...
+VOICE_RUNTIME=twilio
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
 TWILIO_FROM_NUMBER=+14165550100
+LIVEKIT_URL=
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+LIVEKIT_SIP_OUTBOUND_TRUNK_ID=
+LIVEKIT_AGENT_NAME=voice-concierge-caller
+LIVEKIT_WEBHOOK_SECRET=
+LIVEKIT_WAIT_UNTIL_ANSWERED=false
 ```
 
 Do not set `VITE_API_BASE_URL` on Vercel for the current deployment. The frontend and backend are served from the same Vercel origin, so the app uses `/api` automatically.
@@ -73,6 +85,7 @@ npx vercel env add APP_ENV production
 npx vercel env add PUBLIC_BASE_URL production
 npx vercel env add BACKEND_CORS_ORIGINS production
 npx vercel env add MAX_CALLS_PER_TASK production
+npx vercel env add FREE_REQUEST_LIMIT production
 npx vercel env add DEMO_MODE production
 npx vercel env add ALLOW_CALL_RECORDING production
 npx vercel env add AUTH_REQUIRED production
@@ -80,13 +93,24 @@ npx vercel env add CLERK_SECRET_KEY production
 npx vercel env add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY production
 npx vercel env add CLERK_JWKS_URL production
 npx vercel env add CLERK_AUTHORIZED_PARTIES production
+npx vercel env add ADMIN_EMAILS production
+npx vercel env add ADMIN_CLERK_SUBJECTS production
+npx vercel env add PAID_USER_EMAILS production
 npx vercel env add DATABASE_URL production
 npx vercel env add OPENAI_API_KEY production
 npx vercel env add OPENAI_MODEL production
 npx vercel env add GOOGLE_PLACES_API_KEY production
+npx vercel env add VOICE_RUNTIME production
 npx vercel env add TWILIO_ACCOUNT_SID production
 npx vercel env add TWILIO_AUTH_TOKEN production
 npx vercel env add TWILIO_FROM_NUMBER production
+npx vercel env add LIVEKIT_URL production
+npx vercel env add LIVEKIT_API_KEY production
+npx vercel env add LIVEKIT_API_SECRET production
+npx vercel env add LIVEKIT_SIP_OUTBOUND_TRUNK_ID production
+npx vercel env add LIVEKIT_AGENT_NAME production
+npx vercel env add LIVEKIT_WEBHOOK_SECRET production
+npx vercel env add LIVEKIT_WAIT_UNTIL_ANSWERED production
 ```
 
 After changing any Vercel env var, redeploy:
@@ -168,6 +192,39 @@ Optional advanced values:
 
 - `CLERK_JWT_ISSUER`: verify a specific Clerk issuer URL.
 
+### Request limits, admin users, and paid allowlist
+
+The app limits normal signed-in users to one request by default because real tasks can spend money
+on OpenAI, Google Places, Twilio, and LiveKit.
+
+Set:
+
+```bash
+FREE_REQUEST_LIMIT=1
+```
+
+Admin accounts bypass this limit:
+
+```bash
+ADMIN_EMAILS=founder@example.com,ops@example.com
+```
+
+If you prefer to identify an admin by the stable Clerk subject instead of email, open the Clerk user
+profile, copy the `user_...` subject, and add:
+
+```bash
+ADMIN_CLERK_SUBJECTS=user_abc123,user_def456
+```
+
+Until Stripe billing is added, paid users can be allowlisted manually:
+
+```bash
+PAID_USER_EMAILS=customer@example.com
+```
+
+The pricing page explains the public packaging. The backend enforcement is intentionally simple for
+the MVP: free users get `FREE_REQUEST_LIMIT`; admin and paid allowlists are unlimited.
+
 ### OpenAI: `OPENAI_API_KEY`
 
 1. Go to the OpenAI Platform dashboard.
@@ -209,6 +266,69 @@ You do not need to create a TwiML App for the current MVP. Twilio trial accounts
 
 Keep `ALLOW_CALL_RECORDING=false` for initial testing. In that mode the Twilio voice webhook asks the approved questions one at a time with speech gathering, captures each spoken answer, and then summarizes the result without enabling call recording. Turn recording on only after call recording consent, retention, and deletion requirements are handled.
 
+### LiveKit: realtime voice agent runtime
+
+Use LiveKit when you want natural realtime conversations instead of Twilio's scripted
+`<Gather>` flow.
+
+Vercel still hosts the web app and API. LiveKit runs the realtime media session and dispatches the
+voice worker. Twilio can still provide the purchased caller number and PSTN carrier path through
+Elastic SIP Trunking.
+
+Production call flow:
+
+```text
+Vercel API -> LiveKit room -> LiveKit agent worker -> OpenAI Realtime
+           -> LiveKit SIP participant -> Twilio SIP trunk -> recipient phone
+```
+
+1. Create or open a LiveKit Cloud project.
+2. Copy `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`.
+3. In Twilio, create an Elastic SIP Trunk and associate your Twilio number.
+4. In LiveKit, create an outbound SIP trunk that points to the Twilio trunk.
+5. Copy the LiveKit outbound trunk ID to `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
+6. Set a strong shared secret for worker callbacks:
+
+```bash
+LIVEKIT_WEBHOOK_SECRET=$(openssl rand -hex 32)
+```
+
+7. Add these Vercel env vars:
+
+```bash
+VOICE_RUNTIME=livekit
+LIVEKIT_URL=wss://...
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+LIVEKIT_SIP_OUTBOUND_TRUNK_ID=ST_...
+LIVEKIT_AGENT_NAME=voice-concierge-caller
+LIVEKIT_WEBHOOK_SECRET=...
+LIVEKIT_WAIT_UNTIL_ANSWERED=false
+TWILIO_FROM_NUMBER=+16473628073
+```
+
+8. Deploy the worker in `workers/livekit_voice_agent` to LiveKit Cloud agent hosting or another
+long-running container host.
+9. Set the same `LIVEKIT_AGENT_NAME` and `LIVEKIT_WEBHOOK_SECRET` on the worker.
+
+Worker local test:
+
+```bash
+cd workers/livekit_voice_agent
+uv sync
+uv run agent.py dev
+```
+
+Worker production command:
+
+```bash
+uv run agent.py start
+```
+
+If `VOICE_RUNTIME=livekit` but `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` is missing, the backend will not use
+LiveKit and `/health` will show `livekit_calling_enabled: false`. Keep `VOICE_RUNTIME=twilio` until
+the worker and trunk are ready.
+
 ## 4. Real Test Checklist
 
 Use this checklist before sharing the app with users.
@@ -226,9 +346,13 @@ Use this checklist before sharing the app with users.
   "demo_mode": false,
   "google_places_enabled": true,
   "twilio_enabled": true,
+  "voice_runtime": "twilio",
+  "livekit_enabled": false,
+  "livekit_calling_enabled": false,
   "openai_enabled": true,
   "auth_required": true,
-  "auth_configured": true
+  "auth_configured": true,
+  "free_request_limit": 1
 }
 ```
 
@@ -370,6 +494,8 @@ Check the matching env var:
 - `openai_enabled`: needs `OPENAI_API_KEY` and `DEMO_MODE=false`
 - `google_places_enabled`: needs `GOOGLE_PLACES_API_KEY` and `DEMO_MODE=false`
 - `twilio_enabled`: needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, and `DEMO_MODE=false`
+- `livekit_enabled`: needs `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `DEMO_MODE=false`
+- `livekit_calling_enabled`: also needs `VOICE_RUNTIME=livekit` and `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`
 
 ### Twilio call does not start
 

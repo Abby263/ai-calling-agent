@@ -56,6 +56,8 @@ Required production env vars include provider credentials plus:
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY`
 - `CLERK_AUTHORIZED_PARTIES`
+- `FREE_REQUEST_LIMIT`
+- `ADMIN_EMAILS` or `ADMIN_CLERK_SUBJECTS` for unlimited admin usage
 
 The public website remains browsable without login. Task creation, task history, transcripts, approval, cancel, and delete APIs require a signed-in session when auth is enabled.
 
@@ -66,6 +68,34 @@ The public website remains browsable without login. Task creation, task history,
 3. Set `PUBLIC_BASE_URL` to the backend HTTPS URL.
 4. Keep `ALLOW_CALL_RECORDING=false` until recording compliance is approved.
 5. Test with a verified number before calling businesses.
+
+## LiveKit Voice Runtime
+
+Use this path when `VOICE_RUNTIME=livekit`.
+
+Vercel should not host the long-running agent worker. Keep Vercel as the product/API deployment and
+run `workers/livekit_voice_agent` on LiveKit Cloud agent hosting or a container host.
+
+Required env vars on Vercel:
+
+- `LIVEKIT_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`
+- `LIVEKIT_AGENT_NAME`
+- `LIVEKIT_WEBHOOK_SECRET`
+
+Required env vars on the worker:
+
+- `LIVEKIT_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_AGENT_NAME`
+- `LIVEKIT_WEBHOOK_SECRET`
+- `OPENAI_API_KEY`
+
+Keep `VOICE_RUNTIME=twilio` until the worker is deployed and the LiveKit outbound trunk can place a
+test call through Twilio Elastic SIP Trunking.
 
 ## Google Places
 

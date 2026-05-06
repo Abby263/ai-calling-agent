@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC
 from uuid import uuid4
 
@@ -36,9 +37,80 @@ class VoiceCallAgent:
             questions=questions,
             disclosure_log=[*build_disclosure_log(), local_business_hours_note()],
         )
+        if self.settings.livekit_calling_enabled:
+            return await self._place_livekit_call(call)
         if self.settings.twilio_enabled:
             return await self._place_twilio_call(call)
         return self._simulate_call(call)
+
+    async def _place_livekit_call(self, call: CallRecord) -> CallRecord:
+        if not call.phone_number:
+            call.status = CallStatus.FAILED
+            call.ended_at = utc_now()
+            call.transcript = (
+                "System: LiveKit call could not start because no phone number was available."
+            )
+            return call
+
+        from livekit import api
+        from livekit.protocol.sip import CreateSIPParticipantRequest
+
+        room_name = f"voice-concierge-{call.task_id}-{call.id}".replace("_", "-")
+        participant_identity = f"callee-{call.id}"
+        metadata = {
+            "task_id": call.task_id,
+            "call_id": call.id,
+            "business_id": call.business_id,
+            "business_name": call.business_name,
+            "phone_number": call.phone_number,
+            "questions": [question.model_dump(mode="json") for question in call.questions],
+            "callback_url": f"{self.settings.public_base_url}/api/webhooks/livekit/calls/{call.id}",
+            "disclosure_log": call.disclosure_log,
+        }
+        livekit_api = api.LiveKitAPI(
+            url=self.settings.livekit_url,
+            api_key=self.settings.livekit_api_key,
+            api_secret=self.settings.livekit_api_secret,
+        )
+        try:
+            if self.settings.livekit_agent_name:
+                await livekit_api.agent_dispatch.create_dispatch(
+                    api.CreateAgentDispatchRequest(
+                        agent_name=self.settings.livekit_agent_name,
+                        room=room_name,
+                        metadata=json.dumps(metadata),
+                    )
+                )
+            participant = await livekit_api.sip.create_sip_participant(
+                CreateSIPParticipantRequest(
+                    sip_trunk_id=self.settings.livekit_sip_outbound_trunk_id,
+                    sip_call_to=call.phone_number,
+                    sip_number=self.settings.twilio_from_number,
+                    room_name=room_name,
+                    participant_identity=participant_identity,
+                    participant_name=call.business_name,
+                    participant_metadata=json.dumps({"call_id": call.id}),
+                    krisp_enabled=True,
+                    wait_until_answered=self.settings.livekit_wait_until_answered,
+                ),
+                timeout=30,
+            )
+            call.call_sid = participant.sip_call_id or participant.participant_id
+            call.status = CallStatus.CALLING
+            call.started_at = utc_now()
+            call.disclosure_log.append(
+                f"LiveKit room {room_name} created and SIP participant "
+                f"{participant_identity} requested."
+            )
+            return call
+        except Exception as exc:
+            call.status = CallStatus.FAILED
+            call.started_at = call.started_at or utc_now()
+            call.ended_at = utc_now()
+            call.transcript = f"System: LiveKit call setup failed: {exc}"
+            return call
+        finally:
+            await livekit_api.aclose()
 
     async def _place_twilio_call(self, call: CallRecord) -> CallRecord:
         from twilio.rest import Client

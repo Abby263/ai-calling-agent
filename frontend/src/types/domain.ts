@@ -231,4 +231,11 @@ export interface AuthSession {
   authenticated: boolean;
   auth_error?: string | null;
   user?: AuthUser | null;
+  billing?: {
+    plan: "anonymous" | "free" | "paid" | "admin";
+    free_request_limit: number;
+    request_count: number;
+    remaining_requests?: number | null;
+    unlimited: boolean;
+  };
 }

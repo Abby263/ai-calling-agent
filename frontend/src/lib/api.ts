@@ -79,5 +79,8 @@ export const api = {
   },
   deleteTask(taskId: string) {
     return request<void>(`/api/tasks/${taskId}`, { method: "DELETE" });
+  },
+  clearTasks() {
+    return request<void>("/api/tasks", { method: "DELETE" });
   }
 };

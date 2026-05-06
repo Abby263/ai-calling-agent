@@ -29,6 +29,7 @@ class InMemoryTaskStore:
 
     def __init__(self) -> None:
         self._tasks: dict[str, TaskDetail] = {}
+        self._usage_by_user: dict[str, int] = {}
         self._lock = RLock()
 
     def create_preview(
@@ -71,7 +72,19 @@ class InMemoryTaskStore:
         return deepcopy(detail)
 
     def ensure_user(self, *, external_subject: str, email: str | None, name: str | None) -> str:
+        with self._lock:
+            self._usage_by_user.setdefault(external_subject, 0)
         return external_subject
+
+    def get_request_count(self, user_id: str) -> int:
+        with self._lock:
+            return self._usage_by_user.get(user_id, 0)
+
+    def increment_request_count(self, user_id: str) -> int:
+        with self._lock:
+            next_count = self._usage_by_user.get(user_id, 0) + 1
+            self._usage_by_user[user_id] = next_count
+            return next_count
 
     def list_tasks(self, user_id: str | None = None) -> list[TaskListItem]:
         with self._lock:
@@ -169,3 +182,14 @@ class InMemoryTaskStore:
             if not detail or (user_id is not None and detail.task.user_id != user_id):
                 return False
             return self._tasks.pop(task_id, None) is not None
+
+    def delete_tasks(self, user_id: str | None = None) -> int:
+        with self._lock:
+            task_ids = [
+                task_id
+                for task_id, detail in self._tasks.items()
+                if user_id is None or detail.task.user_id == user_id
+            ]
+            for task_id in task_ids:
+                self._tasks.pop(task_id, None)
+            return len(task_ids)

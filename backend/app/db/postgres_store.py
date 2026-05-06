@@ -126,6 +126,28 @@ class PostgresTaskStore:
                 ).fetchone()
         return str(created["id"])
 
+    def get_request_count(self, user_id: str) -> int:
+        with self.pool.connection() as conn:
+            row = conn.execute(
+                "select request_count from users where id = %s",
+                (user_id,),
+            ).fetchone()
+        return int(row["request_count"] or 0) if row else 0
+
+    def increment_request_count(self, user_id: str) -> int:
+        with self.pool.connection() as conn:
+            with conn.transaction():
+                row = conn.execute(
+                    """
+                    update users
+                    set request_count = request_count + 1
+                    where id = %s
+                    returning request_count
+                    """,
+                    (user_id,),
+                ).fetchone()
+        return int(row["request_count"] or 0) if row else 0
+
     def list_tasks(self, user_id: str | None = None) -> list[TaskListItem]:
         where_clause = "where t.user_id = %s" if user_id else ""
         params = (user_id,) if user_id else ()
@@ -307,6 +329,13 @@ class PostgresTaskStore:
         with self.pool.connection() as conn:
             result = conn.execute(f"delete from search_tasks where {where_clause}", params)
         return result.rowcount > 0
+
+    def delete_tasks(self, user_id: str | None = None) -> int:
+        where_clause = "where user_id = %s" if user_id else ""
+        params = (user_id,) if user_id else ()
+        with self.pool.connection() as conn:
+            result = conn.execute(f"delete from search_tasks {where_clause}", params)
+        return result.rowcount or 0
 
     def _insert_business(self, conn, business: BusinessCandidate) -> None:
         conn.execute(
