@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
+import httpx
 from fastapi import HTTPException, Request
 from jwt import InvalidTokenError, PyJWKClient
 from jwt import decode as jwt_decode
@@ -15,6 +16,13 @@ from app.core.config import Settings
 class AuthenticatedUser:
     user_id: str
     subject: str
+    email: str | None = None
+    name: str | None = None
+    picture: str | None = None
+
+
+@dataclass(frozen=True)
+class ClerkUserProfile:
     email: str | None = None
     name: str | None = None
     picture: str | None = None
@@ -76,8 +84,14 @@ class ClerkAuthService:
         if not subject:
             return None
 
-        email = _optional_string(claims.get("email"))
+        email = _email_from_claims(claims)
         name = _optional_string(claims.get("name"))
+        picture = _optional_string(claims.get("picture"))
+        if not email or not name or not picture:
+            profile = _clerk_user_profile(self.settings.clerk_secret_key, subject)
+            email = email or profile.email
+            name = name or profile.name
+            picture = picture or profile.picture
         user_id = request.app.state.store.ensure_user(
             external_subject=f"clerk:{subject}",
             email=email,
@@ -88,7 +102,7 @@ class ClerkAuthService:
             subject=subject,
             email=email,
             name=name,
-            picture=_optional_string(claims.get("picture")),
+            picture=picture,
         )
 
     def _session_token(self, request: Request) -> str | None:
@@ -130,8 +144,73 @@ def _jwks_client(jwks_url: str, secret_key: str | None) -> PyJWKClient:
     return PyJWKClient(jwks_url, headers=headers)
 
 
+_CLERK_PROFILE_CACHE: dict[tuple[str, str], ClerkUserProfile] = {}
+
+
 def _optional_string(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _email_from_claims(claims: dict[str, object]) -> str | None:
+    for key in ("email", "email_address", "primary_email_address"):
+        email = _optional_string(claims.get(key))
+        if email:
+            return email
+    return None
+
+
+def _clerk_user_profile(secret_key: str | None, subject: str) -> ClerkUserProfile:
+    if not secret_key or not subject:
+        return ClerkUserProfile()
+    cache_key = (secret_key, subject)
+    if cache_key in _CLERK_PROFILE_CACHE:
+        return _CLERK_PROFILE_CACHE[cache_key]
+    try:
+        response = httpx.get(
+            f"https://api.clerk.com/v1/users/{subject}",
+            headers={"Authorization": f"Bearer {secret_key}"},
+            timeout=3,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return ClerkUserProfile()
+    if not isinstance(payload, dict):
+        return ClerkUserProfile()
+    profile = ClerkUserProfile(
+        email=_primary_email_from_clerk_user(payload),
+        name=_name_from_clerk_user(payload),
+        picture=_optional_string(payload.get("image_url")),
+    )
+    if profile.email or profile.name or profile.picture:
+        _CLERK_PROFILE_CACHE[cache_key] = profile
+    return profile
+
+
+def _primary_email_from_clerk_user(payload: dict[str, object]) -> str | None:
+    email_addresses = payload.get("email_addresses")
+    if not isinstance(email_addresses, list):
+        return None
+
+    primary_id = _optional_string(payload.get("primary_email_address_id"))
+    first_email: str | None = None
+    for item in email_addresses:
+        if not isinstance(item, dict):
+            continue
+        email = _optional_string(item.get("email_address"))
+        if not email:
+            continue
+        first_email = first_email or email
+        if primary_id and item.get("id") == primary_id:
+            return email
+    return first_email
+
+
+def _name_from_clerk_user(payload: dict[str, object]) -> str | None:
+    first_name = _optional_string(payload.get("first_name"))
+    last_name = _optional_string(payload.get("last_name"))
+    full_name = " ".join(part for part in (first_name, last_name) if part)
+    return full_name or _optional_string(payload.get("username"))
 
 
 def _public_user(user: AuthenticatedUser | None) -> dict[str, str | None] | None:
