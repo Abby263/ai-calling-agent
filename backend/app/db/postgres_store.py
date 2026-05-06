@@ -54,6 +54,7 @@ class PostgresTaskStore:
         location_label: str | None,
         radius: int,
         businesses: list[BusinessCandidate],
+        caller_display_name: str | None = None,
     ) -> TaskDetail:
         task_id = str(uuid4())
         with self.pool.connection() as conn:
@@ -62,9 +63,9 @@ class PostgresTaskStore:
                     """
                     insert into search_tasks (
                       id, user_id, original_request, parsed_intent_json, location_lat, location_lng,
-                      location_label, radius, status, created_at
+                      location_label, radius, status, created_at, caller_display_name
                     )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         task_id,
@@ -77,6 +78,7 @@ class PostgresTaskStore:
                         radius,
                         TaskStatus.AWAITING_APPROVAL,
                         utc_now(),
+                        caller_display_name,
                     ),
                 )
                 for business in businesses:
@@ -232,8 +234,19 @@ class PostgresTaskStore:
         with self.pool.connection() as conn:
             with conn.transaction():
                 conn.execute(
-                    "update search_tasks set status = %s, completed_at = %s where id = %s",
-                    (detail.task.status, detail.task.completed_at, detail.task.id),
+                    """
+                    update search_tasks
+                    set status = %s,
+                        completed_at = %s,
+                        caller_display_name = %s
+                    where id = %s
+                    """,
+                    (
+                        detail.task.status,
+                        detail.task.completed_at,
+                        detail.task.caller_display_name,
+                        detail.task.id,
+                    ),
                 )
                 for business in detail.businesses:
                     conn.execute(
@@ -422,6 +435,9 @@ class PostgresTaskStore:
             status=row["status"],
             created_at=row["created_at"],
             completed_at=row["completed_at"],
+            # Tolerate older row factories that may not include the column —
+            # `row.get` returns None instead of raising KeyError.
+            caller_display_name=row.get("caller_display_name"),
         )
 
     def _business_from_row(self, row) -> BusinessCandidate:
