@@ -44,6 +44,31 @@ class Settings(BaseSettings):
     demo_mode: bool = Field(default=True, alias="DEMO_MODE")
     allow_call_recording: bool = Field(default=False, alias="ALLOW_CALL_RECORDING")
     voice_runtime: str = Field(default="twilio", alias="VOICE_RUNTIME")
+
+    # ------------------------------------------------------------------
+    # Voice call runtime tuning
+    # ------------------------------------------------------------------
+    # Hard wall-clock cap for a single conversational call. The agent will
+    # always wrap up before exceeding this many seconds.
+    voice_max_call_seconds: int = Field(default=75, alias="VOICE_MAX_CALL_SECONDS", ge=15, le=600)
+    # Hard cap on AI turns (one open + N replies). Combined with the time cap,
+    # whichever fires first wins.
+    voice_max_turns: int = Field(default=10, alias="VOICE_MAX_TURNS", ge=2, le=40)
+    # Soft cap on words per AI reply — keeps replies snappy and human-sounding.
+    voice_max_reply_words: int = Field(default=35, alias="VOICE_MAX_REPLY_WORDS", ge=10, le=120)
+    # `<Gather timeout="...">` — initial silence before Twilio gives up.
+    voice_gather_initial_silence_seconds: int = Field(
+        default=4, alias="VOICE_GATHER_INITIAL_SILENCE_SECONDS", ge=2, le=30
+    )
+    # Twilio speech recognition model. `phone_call` works on every account;
+    # `experimental_conversations` gives slightly better results when enabled.
+    voice_speech_model: str = Field(
+        default="phone_call",
+        alias="VOICE_SPEECH_MODEL",
+    )
+    # Twilio `<Say voice="...">` voice. Default Polly voice that sounds far
+    # more human than the legacy "alice".
+    voice_tts_voice: str = Field(default="Polly.Joanna", alias="VOICE_TTS_VOICE")
     livekit_url: str | None = Field(default=None, alias="LIVEKIT_URL")
     livekit_api_key: str | None = Field(default=None, alias="LIVEKIT_API_KEY")
     livekit_api_secret: str | None = Field(default=None, alias="LIVEKIT_API_SECRET")
