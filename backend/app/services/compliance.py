@@ -1,7 +1,13 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from app.prompts import CALL_CLOSING_LINE, DISCLOSURE_LINE_GENERIC as DISCLOSURE_LINE
 from app.schemas import BusinessCandidate, ParsedIntent, Question
+
+# Single source of truth for the legally-required call disclosure and the
+# closing line lives in `app.prompts.conversation`. We re-export them here so
+# legacy callers (recording-mode TwiML, demo simulation, tests) keep working
+# without reaching across packages.
 
 BLOCKED_BUSINESS_TYPES = {
     "emergency",
@@ -12,13 +18,19 @@ BLOCKED_BUSINESS_TYPES = {
     "crisis hotline",
 }
 
-
-DISCLOSURE_LINE = (
-    "Hi, this is an AI assistant calling on behalf of a user. This is not a sales or "
-    "marketing call."
-)
-
-CALL_CLOSING_LINE = "Thank you so much. That's all I needed. Have a great day."
+__all__ = [
+    "BLOCKED_BUSINESS_TYPES",
+    "CALL_CLOSING_LINE",
+    "DISCLOSURE_LINE",
+    "approved_questions",
+    "build_call_script",
+    "build_disclosure_log",
+    "build_numbered_question_prompt",
+    "build_turn_prompt",
+    "ensure_allowed_intent",
+    "local_business_hours_note",
+    "should_call_business",
+]
 
 
 def ensure_allowed_intent(intent: ParsedIntent) -> None:

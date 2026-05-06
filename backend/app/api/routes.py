@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.db.store import utc_now
+from app.prompts import CALL_CLOSING_LINE, CALL_FAILURE_LINE
 from app.schemas import (
     ApproveCallsRequest,
     CallExtraction,
@@ -14,25 +15,11 @@ from app.schemas import (
     TaskListItem,
     TaskPreviewRequest,
 )
-from app.services.agents.conversation import (
-    CALL_CLOSING_LINE as CONVO_CLOSING_LINE,
-    MAX_TURNS,
-    ConversationAgent,
-)
+from app.services.agents.conversation import ConversationAgent
 from app.services.agents.transcript_extraction import TranscriptExtractionAgent
 from app.services.auth import AuthenticatedUser, ClerkAuthService
-from app.services.compliance import (
-    CALL_CLOSING_LINE,
-    approved_questions,
-    build_call_script,
-    build_turn_prompt,
-)
-
-# Hard cap on the wall-clock duration of a single conversational call. Keeps the
-# call short and natural — we'd rather wrap up than ramble.
-MAX_CALL_SECONDS = 75
-# Twilio voice that sounds noticeably more human than the legacy "alice".
-TWILIO_VOICE = "Polly.Joanna"
+from app.services.compliance import approved_questions, build_call_script
+from app.services.errors import AgentError, ConfigurationError, LLMUnavailableError
 
 router = APIRouter(prefix="/api")
 
@@ -80,6 +67,11 @@ async def preview_task(payload: TaskPreviewRequest, request: Request) -> TaskDet
         return detail
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (ConfigurationError, LLMUnavailableError) as exc:
+        # The user explicitly opted into LLM-driven behaviour. When the LLM
+        # can't help, we surface the reason rather than producing a templated
+        # response.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/tasks", response_model=list[TaskListItem])
@@ -104,20 +96,26 @@ async def approve_calls(
     request: Request,
 ) -> TaskDetail:
     user = task_user(request)
-    return await orchestrator(request).approve_calls(
-        task_id,
-        payload,
-        user_id=user.user_id if user else None,
-    )
+    try:
+        return await orchestrator(request).approve_calls(
+            task_id,
+            payload,
+            user_id=user.user_id if user else None,
+        )
+    except (ConfigurationError, LLMUnavailableError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/tasks/{task_id}/summarize", response_model=TaskDetail)
 async def summarize_task(task_id: str, request: Request) -> TaskDetail:
     user = task_user(request)
-    return await orchestrator(request).regenerate_summary(
-        task_id,
-        user_id=user.user_id if user else None,
-    )
+    try:
+        return await orchestrator(request).regenerate_summary(
+            task_id,
+            user_id=user.user_id if user else None,
+        )
+    except (ConfigurationError, LLMUnavailableError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=TaskDetail)
@@ -159,9 +157,11 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
     settings = request.app.state.settings
 
     if settings.allow_call_recording:
-        # Recording mode is left as-is for now: a single block recording with
-        # post-call transcription. This is a fallback; the conversational flow
-        # below is preferred.
+        # Recording mode (opt-in via ALLOW_CALL_RECORDING) plays the approved
+        # script once and records the callee's response. It uses
+        # `build_call_script` to compose a one-shot read of the approved
+        # questions; this is intentionally NOT the conversational LLM path.
+        voice = settings.voice_tts_voice
         script = build_call_script(call.questions)
         transcribe_callback = (
             f"{settings.public_base_url}/api/webhooks/twilio/transcript/{call.id}"
@@ -172,27 +172,33 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
         )
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="{TWILIO_VOICE}">{_xml_escape(script)}</Say>
+  <Say voice="{voice}">{_xml_escape(script)}</Say>
   <Pause length="1"/>
   <Record {record_attrs}/>
-  <Say voice="{TWILIO_VOICE}">{_xml_escape(CALL_CLOSING_LINE)}</Say>
+  <Say voice="{voice}">{_xml_escape(CALL_CLOSING_LINE)}</Say>
 </Response>"""
         return Response(content=twiml, media_type="application/xml")
 
     intent = detail.task.parsed_intent_json if detail else None
     caller_name = detail.task.caller_display_name if detail else None
-    opening = ConversationAgent(settings).opening(
-        call,
-        intent=intent,
-        caller_display_name=caller_name,
-    )
+    try:
+        opening = ConversationAgent(settings).opening(
+            call,
+            intent=intent,
+            caller_display_name=caller_name,
+        )
+    except AgentError as exc:
+        return await _abort_call_with_failure(request, detail, call, reason=str(exc))
+
     call.transcript = _append_turn(call.transcript, "AI", opening.reply)
     store(request).update_call(detail.task.id, call)
 
     next_url = (
         f"{settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/1"
     )
-    twiml = _speech_gather_twiml(action_url=next_url, prompt=opening.reply)
+    twiml = _speech_gather_twiml(
+        settings=settings, action_url=next_url, prompt=opening.reply
+    )
     return Response(content=twiml, media_type="application/xml")
 
 
@@ -256,21 +262,24 @@ async def twilio_speech(
         )
 
     elapsed = _elapsed_seconds(call)
-    over_time = elapsed >= MAX_CALL_SECONDS
-    over_turns = turn_index > MAX_TURNS
+    over_time = elapsed >= settings.voice_max_call_seconds
+    over_turns = turn_index > settings.voice_max_turns
 
     if over_time or over_turns:
-        return await _end_call(request, detail, call, reply=CONVO_CLOSING_LINE)
+        return await _end_call(request, detail, call, reply=CALL_CLOSING_LINE)
 
     intent = detail.task.parsed_intent_json if detail else None
     caller_name = detail.task.caller_display_name if detail else None
-    turn = await ConversationAgent(settings).respond(
-        call=call,
-        last_utterance=callee_text or None,
-        turn_index=turn_index,
-        intent=intent,
-        caller_display_name=caller_name,
-    )
+    try:
+        turn = await ConversationAgent(settings).respond(
+            call=call,
+            last_utterance=callee_text or None,
+            turn_index=turn_index,
+            intent=intent,
+            caller_display_name=caller_name,
+        )
+    except AgentError as exc:
+        return await _abort_call_with_failure(request, detail, call, reason=str(exc))
 
     call.transcript = _append_turn(call.transcript, "AI", turn.reply)
     call.status = CallStatus.CALLING
@@ -283,7 +292,9 @@ async def twilio_speech(
         f"{settings.public_base_url}/api/webhooks/twilio/speech/{call.id}/{turn_index + 1}"
     )
     return Response(
-        content=_speech_gather_twiml(action_url=next_url, prompt=turn.reply),
+        content=_speech_gather_twiml(
+            settings=settings, action_url=next_url, prompt=turn.reply
+        ),
         media_type="application/xml",
     )
 
@@ -415,13 +426,15 @@ def _elapsed_seconds(call) -> float:
 async def _end_call(request, detail, call, *, reply: str, already_appended: bool = False) -> Response:
     """Speak the closing reply, hang up, and finalize the call before returning.
 
-    NOTE: finalization (extraction + summary) runs synchronously here. The earlier
-    fire-and-forget `asyncio.create_task` was unreliable on Vercel serverless —
-    the lambda is killed once the response returns, so the background extraction
-    silently dropped, leaving the UI without a decision or summary. Doing it
-    inline costs Twilio an extra second on the closing turn but guarantees the
-    decision is in the store by the time the user polls.
+    NOTE: finalization (extraction + summary) runs synchronously here. The
+    earlier fire-and-forget `asyncio.create_task` was unreliable on Vercel
+    serverless — the lambda is killed once the response returns, so the
+    background extraction silently dropped, leaving the UI without a decision
+    or summary. Inline finalization costs Twilio an extra second on the
+    closing turn but guarantees the decision is in the store by the time the
+    user polls.
     """
+    settings = request.app.state.settings
     if not already_appended:
         call.transcript = _append_turn(call.transcript, "AI", reply)
     call.status = CallStatus.COMPLETED
@@ -431,49 +444,86 @@ async def _end_call(request, detail, call, *, reply: str, already_appended: bool
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<Response>\n"
-        f"  <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(reply)}</Say>\n"
+        f"  <Say voice=\"{settings.voice_tts_voice}\">{_xml_escape(reply)}</Say>\n"
         "  <Hangup/>\n"
         "</Response>"
     )
 
     try:
         if call.extraction_json is None:
-            call.extraction_json = await TranscriptExtractionAgent(
-                request.app.state.settings
-            ).extract(call)
+            call.extraction_json = await TranscriptExtractionAgent(settings).extract(call)
             store(request).update_call(detail.task.id, call)
         await orchestrator(request).finalize_if_ready(detail.task.id)
-    except Exception:
-        # Don't let a finalize failure break the hangup TwiML — the Twilio status
-        # callback (`/webhooks/twilio/status`) will retry finalize when the call
-        # is reported as completed.
-        pass
+    except AgentError as exc:
+        # Persist the failure reason on the transcript so the dashboard shows
+        # the user *why* extraction/summary couldn't complete instead of going
+        # silent. The Twilio status callback will retry finalize when it reports
+        # the call as completed.
+        call.transcript = _append_turn(
+            call.transcript,
+            "System",
+            f"Finalization failed: {exc}",
+        )
+        store(request).update_call(detail.task.id, call)
     return Response(content=twiml, media_type="application/xml")
 
 
-def _speech_gather_twiml(*, action_url: str, prompt: str) -> str:
+async def _abort_call_with_failure(request, detail, call, *, reason: str) -> Response:
+    """Mid-call agent failure: hang up gracefully, persist the reason, finalize.
+
+    Called when the LLM is unreachable while a Twilio call is live. We say a
+    short apology (`CALL_FAILURE_LINE`) and hang up — the dashboard surfaces
+    `reason` on the call's transcript so the user sees what happened.
+    """
+    settings = request.app.state.settings
+    call.transcript = _append_turn(
+        call.transcript,
+        "System",
+        f"AI agent unavailable: {reason}",
+    )
+    call.transcript = _append_turn(call.transcript, "AI", CALL_FAILURE_LINE)
+    call.status = CallStatus.FAILED
+    call.ended_at = utc_now()
+    store(request).update_call(detail.task.id, call)
+
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        f"  <Say voice=\"{settings.voice_tts_voice}\">"
+        f"{_xml_escape(CALL_FAILURE_LINE)}</Say>\n"
+        "  <Hangup/>\n"
+        "</Response>"
+    )
+    try:
+        await orchestrator(request).finalize_if_ready(detail.task.id)
+    except AgentError:
+        pass  # already recorded the failure on the transcript
+    return Response(content=twiml, media_type="application/xml")
+
+
+def _speech_gather_twiml(*, settings, action_url: str, prompt: str) -> str:
     """TwiML that speaks the prompt and gathers a natural speech response.
 
-    Tuned for snappier turns:
-      - `timeout=4`: shorter window before we treat silence as the callee not
-        responding (was 6s — felt sluggish).
-      - `speechTimeout="auto"`: Twilio still detects end-of-utterance properly.
-      - `speechModel="phone_call"`: the conversation-tuned model isn't always
-        available on every account; `phone_call` is a reliable fast default.
-      - `actionOnEmptyResult="true"`: hand control back to the next webhook even
-        if the callee was silent, so the agent can prompt again instead of the
-        line dying.
+    Tuning is config-driven (see Settings.voice_*):
+      - `timeout`: initial silence before we treat it as no answer.
+      - `speechTimeout="auto"`: Twilio detects end-of-utterance dynamically.
+      - `speechModel`: configurable; defaults to "phone_call" which works on
+        every Twilio account.
+      - `actionOnEmptyResult="true"`: hand control back to the next webhook
+        even if the callee was silent, so the agent can prompt again instead
+        of the line dying.
     """
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<Response>\n"
         f'  <Gather input="speech" action="{action_url}" method="POST" '
-        'timeout="4" speechTimeout="auto" '
-        'speechModel="phone_call" '
+        f'timeout="{settings.voice_gather_initial_silence_seconds}" '
+        'speechTimeout="auto" '
+        f'speechModel="{settings.voice_speech_model}" '
         'actionOnEmptyResult="true">\n'
-        f"    <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(prompt)}</Say>\n"
+        f"    <Say voice=\"{settings.voice_tts_voice}\">{_xml_escape(prompt)}</Say>\n"
         "  </Gather>\n"
-        f"  <Say voice=\"{TWILIO_VOICE}\">{_xml_escape(CALL_CLOSING_LINE)}</Say>\n"
+        f"  <Say voice=\"{settings.voice_tts_voice}\">{_xml_escape(CALL_CLOSING_LINE)}</Say>\n"
         "  <Hangup/>\n"
         "</Response>"
     )
