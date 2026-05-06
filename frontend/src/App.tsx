@@ -12,7 +12,6 @@ import {
   ListChecks,
   LockKeyhole,
   LogIn,
-  LogOut,
   MapPin,
   Mic2,
   Moon,
@@ -182,9 +181,6 @@ function ProductHeader({
 }) {
   const navItems = [
     { label: "Overview", href: "/", action: onGoHome },
-    { label: "Use cases", href: "/#use-cases" },
-    { label: "Workflow", href: "/#how-it-works" },
-    { label: "Architecture", href: "/#architecture" },
     { label: "Dashboard", href: "/app", action: onOpenApp }
   ];
 
@@ -395,6 +391,18 @@ function LandingPage({ darkMode, onToggleTheme, onOpenApp, authClient }: Landing
 
       <section id="use-cases" className="bg-white/70 py-12 dark:bg-slate-950/40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="mb-7 max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
+              Use cases
+            </p>
+            <h2 className="mt-3 font-display text-3xl font-semibold text-slate-950 dark:text-white">
+              One concierge flow for calls people do not want to make manually.
+            </h2>
+            <p className="mt-3 text-base leading-7 text-slate-600 dark:text-slate-400">
+              The landing page explains what the product does. The dashboard is where signed-in users create,
+              approve, and monitor real calling tasks.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-4">
             {useCases.map((item) => {
               const Icon = item.icon;
@@ -640,21 +648,6 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
     setError(err instanceof Error ? err.message : fallback);
   }
 
-  async function handleLogout() {
-    setLoading(true);
-    setError(null);
-    try {
-      authClient.signOut();
-      setTask(null);
-      setStage("request");
-      setHistory([]);
-    } catch (err) {
-      handleApiFailure(err, "Sign out failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function handlePreview() {
     if (handleAuthGate()) return;
     setLoading(true);
@@ -842,55 +835,12 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, authClient }: ConsoleP
                       <ShieldCheck size={12} />
                       AI disclosure
                     </Badge>
-                    {authSession?.auth_required ? (
-                      authClient.isSignedIn ? (
-                        <>
-                          <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                            <UserCircle size={12} />
-                            {authClient.user?.name || authClient.user?.email || "Signed in"}
-                          </Badge>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-10 w-10 px-0 sm:w-auto sm:px-4"
-                            aria-label="Sign out"
-                            title="Sign out"
-                            onClick={handleLogout}
-                            disabled={loading}
-                          >
-                            <LogOut size={16} />
-                            <span className="hidden sm:inline">Sign out</span>
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-10 px-4"
-                          onClick={authClient.signIn}
-                          disabled={
-                            authLoading ||
-                            !authSession.auth_configured ||
-                            !authClient.frontendConfigured
-                          }
-                        >
-                          <LogIn size={16} />
-                          Sign in
-                        </Button>
-                      )
+                    {authSession?.auth_required && authClient.isSignedIn ? (
+                      <Badge className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                        <UserCircle size={12} />
+                        {authClient.user?.name || authClient.user?.email || "Signed in"}
+                      </Badge>
                     ) : null}
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-10 w-10 px-0 sm:w-auto sm:px-4"
-                      aria-label="Open overview"
-                      title="Open overview"
-                      onClick={onGoHome}
-                    >
-                      <Globe2 size={16} />
-                      <span className="hidden sm:inline">Overview</span>
-                    </Button>
-                    <ThemeButton darkMode={darkMode} onToggleTheme={onToggleTheme} />
                     <Button
                       type="button"
                       className="h-10 w-10 px-0 sm:w-auto sm:px-4"
