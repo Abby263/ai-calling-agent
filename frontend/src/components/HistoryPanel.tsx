@@ -51,8 +51,8 @@ export function HistoryPanel({
               </p>
             </div>
           </div>
-          <Button type="button" variant="ghost" className="h-8 min-h-8 w-8 shrink-0 p-0" onClick={onRefresh} disabled={loading || busy} title="Refresh history" aria-label="Refresh history">
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          <Button type="button" variant="ghost" className="h-8 min-h-8 w-8 shrink-0 !p-0" onClick={onRefresh} disabled={loading || busy} title="Refresh history" aria-label="Refresh history">
+            <RefreshCw size={14} className={`shrink-0 ${loading ? "animate-spin" : ""}`} />
           </Button>
           {tasks.length ? (
             <Button
