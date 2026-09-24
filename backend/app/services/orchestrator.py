@@ -124,8 +124,21 @@ class TaskOrchestrator:
         detail = self.store.get_task(task_id, user_id=user_id)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
+        if detail.task.status in {TaskStatus.CANCELLED, TaskStatus.FAILED}:
+            raise HTTPException(status_code=409, detail="This run has stopped.")
+        if not detail.calls or any(
+            call.status not in TERMINAL_CALL_STATUSES for call in detail.calls
+        ):
+            raise HTTPException(
+                status_code=409, detail="Results are available after all calls end."
+            )
         detail = await self._ensure_terminal_extractions(detail, user_id=user_id)
         summary = await self.summary.summarize(detail)
+        current = self.store.get_task(task_id, user_id=user_id)
+        if not current:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if current.task.status in {TaskStatus.CANCELLED, TaskStatus.FAILED}:
+            return current
         self.store.set_summary(task_id, summary)
         return self.store.get_task(task_id, user_id=user_id) or detail
 
@@ -137,6 +150,8 @@ class TaskOrchestrator:
         detail = self.store.get_task(task_id, user_id=user_id)
         if not detail:
             raise HTTPException(status_code=404, detail="Task not found")
+        if detail.summary or detail.task.status in {TaskStatus.CANCELLED, TaskStatus.FAILED}:
+            return detail
         if not detail.calls or any(
             call.status not in TERMINAL_CALL_STATUSES for call in detail.calls
         ):
@@ -166,4 +181,3 @@ def _normalize_caller_name(value: str | None) -> str | None:
         return None
     # Cap to avoid over-long names burning TwiML/TTS time.
     return cleaned[:80]
-

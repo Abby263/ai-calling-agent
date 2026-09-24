@@ -140,4 +140,24 @@ select {
   body {
     background: #ffffff;
   }
+
+  body:has(.results-view) * { visibility: hidden; }
+  body .results-view, body .results-view * { visibility: visible; }
+  .results-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .results-view, .results-view * {
+    color: #111827 !important;
+    background: white !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  .results-view .result-actions { display: none; }
+  .results-view table { min-width: 0; font-size: 10px; }
+  .results-view th, .results-view td { padding: 6px; overflow-wrap: anywhere; }
+  .results-view .overflow-x-auto { overflow: visible; }
+  .results-view article { break-inside: avoid; }
 }
