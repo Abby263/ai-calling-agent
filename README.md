@@ -62,7 +62,11 @@ The app parses the request, builds the call targets, proposes the questions, and
 
 ### 3. Decision-Ready Results
 
-After the calls finish, the dashboard renders the final summary, the structured comparison table, per-call outcomes, transcript evidence, and export options (PDF, JSON, email).
+After the calls finish, the dashboard renders the final summary, the structured comparison table, per-call outcomes, transcript evidence, and export options (CSV, PDF, JSON, email). You can also copy the summary to your clipboard. PDF printing includes the results rather than the navigation and task history.
+
+Task history supports text search, status filters, timestamps, refresh, and deletion. **Use as new request** copies a saved request into the editor without starting a task or placing calls. Review and submit the new request, then approve its call list separately.
+
+Results remain unavailable until calls have finished. Interrupted status updates display a reconnecting message and retry; switching tasks discards stale updates. Cancelled and failed tasks do not continue polling or become completed through normal summary finalization.
 
 ![Voice Concierge results screen](docs/assets/ui-results.png)
 
@@ -351,11 +355,15 @@ For medical or clinic calls, the agent should ask about appointment availability
 ## Verification
 
 ```bash
+cd frontend
+npm test
 npm run build
 
-cd backend
-pytest
+cd ../backend
+uv run pytest
 ```
+
+Frontend tests cover workflow navigation, polling eligibility, history filtering, and safe CSV exports. Backend tests include incomplete-call summary guards and repeated/late completion callbacks. Browser verification uses mocked API responses and does not place real calls. Test your configured voice runtime separately with an approved contact before onboarding users.
 
 The UI screenshots in this README were generated from the running app with Playwright.
 

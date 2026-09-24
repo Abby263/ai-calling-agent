@@ -1,4 +1,6 @@
-import { CheckCircle2, Download, FileText, Loader2, Mail, MessageCircle, Printer, Sparkles, Table2 } from "lucide-react";
+import { CheckCircle2, Copy, Download, FileText, Loader2, Mail, MessageCircle, Printer, Sparkles, Table2 } from "lucide-react";
+import { useState } from "react";
+import { downloadFile, resultsCsv } from "../lib/export-results";
 
 import { metersToDistance, outcomeLabel, statusClass, triStateLabel } from "../lib/format";
 import type { TaskDetail } from "../types/domain";
@@ -7,6 +9,7 @@ import { CallDecisionPanel } from "./CallDecisionPanel";
 import { CallTranscript } from "./CallTranscript";
 
 export function ResultsView({ task }: { task: TaskDetail }) {
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const results = task.summary?.recommendation_json.results ?? [];
   const isDirectCallTask = task.task.parsed_intent_json.task_kind === "direct_calls";
   const isAppointmentTask =
@@ -20,17 +23,20 @@ export function ResultsView({ task }: { task: TaskDetail }) {
   const recommendedCount = results.filter((result) => result.recommended).length;
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify(task, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `voice-concierge-${task.task.id}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadFile(JSON.stringify(task, null, 2), "application/json", `voice-concierge-${task.task.id}.json`);
+  }
+
+  async function copySummary() {
+    try {
+      await navigator.clipboard.writeText(task.summary?.final_summary ?? "");
+      setCopyStatus("Summary copied.");
+    } catch {
+      setCopyStatus("Copy unavailable. Select the summary text to copy it.");
+    }
   }
 
   return (
-    <section className="grid gap-5">
+    <section className="results-view grid gap-5">
       <div className="surface-strong relative overflow-hidden p-5 sm:p-6">
         <div
           aria-hidden
@@ -50,7 +56,13 @@ export function ResultsView({ task }: { task: TaskDetail }) {
                   : "Business comparison"}
             </h1>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="result-actions flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={copySummary} disabled={!task.summary}>
+              <Copy size={15} /> Copy summary
+            </Button>
+            <Button type="button" variant="secondary" disabled={!results.length} onClick={() => downloadFile(resultsCsv(results), "text/csv;charset=utf-8", `voice-concierge-${task.task.id}.csv`)}>
+              <Table2 size={15} /> CSV
+            </Button>
             <Button type="button" variant="secondary" onClick={() => window.print()}>
               <Printer size={15} />
               PDF
@@ -68,6 +80,7 @@ export function ResultsView({ task }: { task: TaskDetail }) {
             </a>
           </div>
         </div>
+        {copyStatus ? <p role="status" className="mt-3 text-sm text-slate-700 dark:text-slate-200">{copyStatus}</p> : null}
         <div className="relative mt-5 grid gap-3 sm:grid-cols-3">
           {[
             ["Completed calls", completedCalls, CheckCircle2, "text-emerald-600 dark:text-emerald-400"],

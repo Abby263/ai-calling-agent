@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -28,14 +28,10 @@ import { ResultsView } from "./components/ResultsView";
 import { Badge, Button } from "./components/ui";
 import { ApiError, api } from "./lib/api";
 import { statusClass } from "./lib/format";
+import { callsAreTerminal, canOpenStage, shouldPollTask, type Stage } from "./lib/task-workflow";
 import type { AuthSession, LocationInput, Question, SearchFilters, TaskDetail, TaskListItem } from "./types/domain";
 
-type Stage = "request" | "preview" | "progress" | "results";
-
-const TERMINAL_CALL_STATUSES = new Set(["completed", "failed", "no_answer", "voicemail"]);
-
-const DEFAULT_REQUEST =
-  "Call +1 416 555 0101, +1 416 555 0102, and +1 416 555 0103. Invite them for dinner tonight and track who says yes.";
+const DEFAULT_REQUEST = "";
 
 const initialFilters: SearchFilters = {
   radius_meters: 3000,
@@ -350,8 +346,23 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   const [loading, setLoading] = useState(false);
   const [finalizingResults, setFinalizingResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const viewVersion = useRef(0);
+  const historyVersion = useRef(0);
 
   const activeId = task?.task.id;
+
+  useEffect(() => {
+    viewVersion.current += 1;
+    historyVersion.current += 1;
+    setTask(null);
+    setHistory([]);
+    setStage("request");
+    setError(null);
+    setPollError(null);
+  }, [authClient.user?.id]);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -370,19 +381,28 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   }, []);
 
   const refreshHistory = useCallback(async () => {
+    const version = ++historyVersion.current;
     if (
       authSession?.auth_required &&
       (!authClient.isSignedIn || !authSession.authenticated)
     ) {
       setHistory([]);
+      setHistoryLoading(false);
+      setHistoryError(null);
       return;
     }
+    setHistoryLoading(true);
     try {
-      setHistory(await api.listTasks());
+      const tasks = await api.listTasks();
+      if (version !== historyVersion.current) return;
+      setHistory(tasks);
+      setHistoryError(null);
     } catch {
-      setHistory([]);
+      if (version === historyVersion.current) setHistoryError("Could not load history. Refresh to try again.");
+    } finally {
+      if (version === historyVersion.current) setHistoryLoading(false);
     }
-  }, [authClient.isSignedIn, authSession?.auth_required]);
+  }, [authClient.isSignedIn, authClient.user?.id, authSession?.auth_required, authSession?.authenticated]);
 
   useEffect(() => {
     if (authClient.isLoaded) refreshAuth();
@@ -403,33 +423,38 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
     }
   }, [authClient.user?.name, callerName]);
 
+  const pollTaskId = task && !loading && !finalizingResults && shouldPollTask(task) ? task.task.id : null;
   useEffect(() => {
-    if (!task || !shouldPollTask(task)) {
-      return;
-    }
-    const interval = window.setInterval(async () => {
+    if (!pollTaskId) return;
+    let disposed = false;
+    let timer: number | undefined;
+    const version = viewVersion.current;
+    const isCurrent = () => !disposed && version === viewVersion.current;
+    async function poll() {
       try {
-        const updated = await api.getTask(task.task.id);
+        let updated = await api.getTask(pollTaskId!);
+        if (!isCurrent()) return;
+        if (shouldPollTask(updated) && callsAreTerminal(updated)) {
+          updated = await api.summarizeTask(updated.task.id);
+          if (!isCurrent()) return;
+        }
         setTask(updated);
-        if (updated.summary || updated.task.status === "completed") {
+        setPollError(null);
+        if (updated.summary) {
           setStage("results");
-          refreshHistory();
+        }
+        if (!shouldPollTask(updated)) {
+          void refreshHistory();
           return;
         }
-        if (callsAreTerminal(updated)) {
-          const summarized = await api.summarizeTask(updated.task.id);
-          setTask(summarized);
-          if (summarized.summary || summarized.task.status === "completed") {
-            setStage("results");
-            refreshHistory();
-          }
-        }
-      } catch (err) {
-        handleApiFailure(err, "Polling failed.");
+      } catch {
+        if (isCurrent()) setPollError("Live updates interrupted. Reconnecting automatically; your calls may still be running.");
       }
-    }, 3000);
-    return () => window.clearInterval(interval);
-  }, [refreshHistory, task]);
+      if (isCurrent()) timer = window.setTimeout(poll, 3000);
+    }
+    timer = window.setTimeout(poll, 3000);
+    return () => { disposed = true; window.clearTimeout(timer); };
+  }, [refreshHistory, pollTaskId]);
 
   function handleAuthGate(): boolean {
     if (!authSession?.auth_required) return false;
@@ -485,6 +510,7 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
       setStage("preview");
       window.scrollTo({ top: 0, behavior: "smooth" });
       refreshHistory();
+      refreshAuth();
     } catch (err) {
       handleApiFailure(err, "Preview failed.");
     } finally {
@@ -520,6 +546,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   async function openTask(id: string) {
     if (handleAuthGate()) return;
     setLoading(true);
+    viewVersion.current += 1;
+    setPollError(null);
     setError(null);
     try {
       const detail = await api.getTask(id);
@@ -529,10 +557,10 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
       if (detail.task.caller_display_name) setCallerName(detail.task.caller_display_name);
       setSelectedIds(detail.businesses.filter((business) => business.selected_for_call).map((business) => business.id));
       if (detail.summary) setStage("results");
-      else if (callsAreTerminal(detail)) {
+      else if (callsAreTerminal(detail) && shouldPollTask(detail)) {
         setStage("progress");
         finalizeTask(detail.task.id);
-      } else if (detail.calls.length) setStage("progress");
+      } else if (canOpenStage("progress", detail)) setStage("progress");
       else setStage("preview");
     } catch (err) {
       handleApiFailure(err, "Could not open task.");
@@ -544,12 +572,15 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
   async function cancelTask() {
     if (!task) return;
     if (handleAuthGate()) return;
+    setLoading(true);
     try {
       const updated = await api.cancelTask(task.task.id);
       setTask(updated);
       refreshHistory();
     } catch (err) {
       handleApiFailure(err, "Could not cancel task.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -572,15 +603,20 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
 
   async function deleteTask(id: string) {
     if (handleAuthGate()) return;
+    if (!window.confirm("Delete this request and its saved results? This cannot be undone.")) return;
+    setLoading(true);
     try {
       await api.deleteTask(id);
       if (task?.task.id === id) {
+        viewVersion.current += 1;
         setTask(null);
         setStage("request");
       }
       refreshHistory();
     } catch (err) {
       handleApiFailure(err, "Could not delete task.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -588,24 +624,59 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
     if (handleAuthGate()) return;
     const confirmed = window.confirm("Delete all saved task history for this account?");
     if (!confirmed) return;
+    setLoading(true);
     try {
       await api.clearTasks();
+      viewVersion.current += 1;
+      historyVersion.current += 1;
       setTask(null);
       setStage("request");
       setHistory([]);
+      setHistoryLoading(false);
+      setHistoryError(null);
       setError(null);
     } catch (err) {
       handleApiFailure(err, "Could not clear task history.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reuseTask(id: string) {
+    if (handleAuthGate()) return;
+    setLoading(true);
+    try {
+      const detail = await api.getTask(id);
+      viewVersion.current += 1;
+      setTask(null);
+      setStage("request");
+      setRequestText(detail.task.original_request);
+      setLocation({ label: detail.task.location_label, lat: detail.task.location_lat, lng: detail.task.location_lng });
+      setFilters({ ...initialFilters, radius_meters: detail.task.radius });
+      setCallerName(detail.task.caller_display_name ?? "");
+      setQuestions([]);
+      setSelectedIds([]);
+      setError(null);
+      setPollError(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      handleApiFailure(err, "Could not reuse request.");
+    } finally {
+      setLoading(false);
     }
   }
 
   function startNewTask() {
+    if (loading || finalizingResults) return;
+    viewVersion.current += 1;
     setTask(null);
     setStage("request");
     setRequestText(DEFAULT_REQUEST);
     setQuestions([]);
     setSelectedIds([]);
     setError(null);
+    setPollError(null);
+    setFilters(initialFilters);
   }
 
   const stageItems = useMemo(
@@ -706,13 +777,13 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
                     key={item.value}
                     active={stage === item.value}
                     done={activeStageIndex > index}
-                    disabled={item.value !== "request" && !task}
+                    disabled={loading || finalizingResults || !canOpenStage(item.value, task)}
                     index={index}
                     label={item.label}
                     hint={item.hint}
                     icon={item.icon}
                     onClick={() => {
-                      if (item.value === "request" || task) setStage(item.value);
+                      if (canOpenStage(item.value, task)) setStage(item.value);
                     }}
                   />
                 ))}
@@ -720,6 +791,8 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
             </section>
 
             <div className="animate-fade-in">
+              {error && stage !== "request" && stage !== "preview" ? <p role="alert" className="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-200">{error}</p> : null}
+              {pollError && stage === "progress" ? <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">{pollError}</p> : null}
               {stage === "request" ? (
                 <RequestComposer
                   requestText={requestText}
@@ -765,10 +838,11 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
                   onResults={() => setStage("results")}
                   onFinalize={() => finalizeTask()}
                   finalizing={finalizingResults}
+                  cancelling={loading}
                 />
               ) : null}
 
-              {stage === "results" && task ? <ResultsView task={task} /> : null}
+              {stage === "results" && task ? <ResultsView key={task.task.id} task={task} /> : null}
             </div>
           </div>
 
@@ -778,22 +852,16 @@ function ConsolePage({ darkMode, onToggleTheme, onGoHome, onOpenPricing, authCli
             onOpen={openTask}
             onDelete={deleteTask}
             onClear={clearHistory}
+            onReuse={reuseTask}
+            onRefresh={refreshHistory}
+            loading={historyLoading}
+            busy={loading || finalizingResults}
+            error={historyError}
           />
         </div>
       </div>
     </main>
   );
-}
-
-function callsAreTerminal(task: TaskDetail): boolean {
-  return task.calls.length > 0 && task.calls.every((call) => TERMINAL_CALL_STATUSES.has(call.status));
-}
-
-function shouldPollTask(task: TaskDetail): boolean {
-  if (["calling", "summarizing"].includes(task.task.status)) {
-    return true;
-  }
-  return callsAreTerminal(task) && !task.summary;
 }
 
 function authSessionErrorMessage(session: AuthSession): string {

@@ -11,14 +11,17 @@ export function ProgressTimeline({
   onCancel,
   onResults,
   onFinalize,
-  finalizing = false
+  finalizing = false,
+  cancelling = false
 }: {
   task: TaskDetail;
   onCancel: () => void;
   onResults: () => void;
   onFinalize: () => void;
   finalizing?: boolean;
+  cancelling?: boolean;
 }) {
+  const stopped = ["cancelled", "failed"].includes(task.task.status);
   const isDirectCallTask = task.task.parsed_intent_json.task_kind === "direct_calls";
   const isAppointmentTask =
     task.task.parsed_intent_json.output_format === "appointment_availability_tracker" ||
@@ -50,12 +53,12 @@ export function ProgressTimeline({
               Live call progress
             </p>
             <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.7rem]">
-              {allCallsTerminal && !task.summary
+              {stopped ? (task.task.status === "cancelled" ? "Run cancelled" : "Run failed") : allCallsTerminal && !task.summary
                 ? "Preparing results"
                 : `Calling approved ${isDirectCallTask ? "contacts" : "businesses"}`}
             </h1>
             <p className="mt-1.5 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              {allCallsTerminal && !task.summary
+              {stopped ? "Review the available call details below." : allCallsTerminal && !task.summary
                 ? "All calls have ended. Building the structured summary from captured answers and call status."
                 : "Streaming status, transcripts, and structured extraction for each approved target."}
             </p>
@@ -66,15 +69,15 @@ export function ProgressTimeline({
                 <CheckCircle2 size={15} />
                 View results
               </Button>
-            ) : allCallsTerminal ? (
+            ) : stopped ? null : allCallsTerminal ? (
               <Button type="button" onClick={onFinalize} disabled={finalizing}>
                 <CheckCircle2 size={15} />
                 {finalizing ? "Building results" : "Build results"}
               </Button>
             ) : (
-              <Button type="button" variant="danger" onClick={onCancel}>
+              <Button type="button" variant="danger" onClick={onCancel} disabled={cancelling}>
                 <Ban size={15} />
-                Cancel run
+                {cancelling ? "Cancelling…" : "Cancel run"}
               </Button>
             )}
           </div>
