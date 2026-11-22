@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "voice-concierge",
+  "repository": "Abby263/ai-calling-agent",
+  "catalog": "listed",
+  "availability": "request_integration",
+  "name": "Voice Concierge",
+  "category": "Customer operations",
+  "description": "Draft supplier or customer follow-up questions and track approved voice tasks.",
+  "request": "A follow-up objective and approved recipients and questions.",
+  "response": "Call plan, task status, and structured outcomes.",
+  "integration": {
+    "operation": "Prepare a call plan and read its status.",
+    "readiness": "Wrap the existing task preview and status API in an isolated demo environment. Real calls retain the existing approval flow."
+  }
+}
